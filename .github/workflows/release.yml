@@ -36,7 +36,7 @@ jobs:
     env:
       DOCKER_BUILDKIT: 1 # Disabled for now, but we should look at this because it will speedup building!
       # DOCKER_REPO/secrets.DOCKERHUB_REPO needs to be 'index.docker.io/<user>/<repo>'
-      DOCKER_REPO: "ghcr.io/GeekCornerGH/vaultwarden"
+      DOCKER_REPO: "ghcr.io/geekcornergh/vaultwarden"
       SOURCE_COMMIT: ${{ github.sha }}
       SOURCE_REPOSITORY_URL: "https://github.com/${{ github.repository }}"
     strategy:
