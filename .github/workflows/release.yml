@@ -39,7 +39,6 @@ jobs:
       DOCKER_REPO: "ghcr.io/GeekCornerGH/vaultwarden"
       SOURCE_COMMIT: ${{ github.sha }}
       SOURCE_REPOSITORY_URL: "https://github.com/${{ github.repository }}"
-    if: ${{ needs.skip_check.outputs.should_skip != 'true' && github.repository == 'dani-garcia/vaultwarden' }}
     strategy:
       matrix:
         base_image: ["debian","alpine"]
