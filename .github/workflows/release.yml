@@ -27,7 +27,6 @@ jobs:
   docker-build:
     runs-on: ubuntu-20.04
     timeout-minutes: 120
-    needs: skip_check
     # Start a local docker registry to be used to generate multi-arch images.
     services:
       registry:
