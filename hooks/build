@@ -36,13 +36,10 @@ done
 
 # Check if DOCKER_BUILDKIT is set, if so, use the Dockerfile.buildkit as template
 if [[ -n "${DOCKER_BUILDKIT}" ]]; then
-    buildkit_suffix=.buildkit.alpine
+    buildkit_suffix=.buildkit
 fi
 
 set -ex
-
-DOCKER_REPO=dpinse/vaultwarden
-DOCKER_TAG=testing-alpine
 
 for arch in "${arches[@]}"; do
     docker build \

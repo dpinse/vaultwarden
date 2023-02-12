@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./hooks/arches.sh
+source hooks/arches.sh
 
 export DOCKER_CLI_EXPERIMENTAL=enabled
 
@@ -32,9 +32,6 @@ if ! timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/5000'; then
     # defaults to port 5000
     docker run -d --name registry --network host registry:2
 fi
-
-DOCKER_REPO=dpinse/vaultwarden
-DOCKER_TAG=testing-alpine
 
 # Docker Hub sets a `DOCKER_REPO` env var with the format `index.docker.io/user/repo`.
 # Strip the registry portion to construct a local repo path for use in `Dockerfile.buildx`.
