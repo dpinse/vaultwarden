@@ -60,7 +60,7 @@
 # 	https://whitfin.io/speeding-up-rust-docker-builds/
 ####################### VAULT BUILD IMAGE  #######################
 {% set vault_version = "v2023.1.1" %}
-{% set vault_image_digest = "sha256:d5f71fb05c4b87935bf51d84140db0f8716cabfe2974fbee6c0c5ee8cf7dab5a" %}
+{% set vault_image_digest = "sha256:eb49b6aab24755769ea39f030ece109b3e883de433e859179450254a37bd88bf" %}
 # The web-vault digest specifies a particular web-vault build on Docker Hub.
 # Using the digest instead of the tag name provides better security,
 # as the digest of an image is immutable, whereas a tag name can later
@@ -78,7 +78,7 @@
 #     $ docker image inspect --format "{{ '{{' }}.RepoTags}}" vaultwarden/web-vault@{{ vault_image_digest }}
 #     [vaultwarden/web-vault:{{ vault_version }}]
 #
-FROM vaultwarden/web-vault@{{ vault_image_digest }} as vault
+FROM dpinse/vaultwarden@{{ vault_image_digest }} as vault
 
 ########################## BUILD IMAGE  ##########################
 FROM {{ build_stage_base_image }} as build

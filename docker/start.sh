@@ -22,4 +22,7 @@ elif [ -d /etc/bitwarden_rs.d ]; then
     done
 fi
 
+sed -i 's/Vaultwarden (unofficial Bitwarden® server)/© 2022 Bitwarden Inc./g' /web-vault/app/main.*.js
+echo 'Patching webvault complete'
+
 exec /vaultwarden "${@}"

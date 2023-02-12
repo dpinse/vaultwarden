@@ -2,7 +2,7 @@
 
 echo ">>> Building images..."
 
-source ./hooks/arches.sh
+source hooks/arches.sh
 
 if [[ -z "${SOURCE_COMMIT}" ]]; then
     # This var is typically predefined by Docker Hub, but it won't be
@@ -36,10 +36,13 @@ done
 
 # Check if DOCKER_BUILDKIT is set, if so, use the Dockerfile.buildkit as template
 if [[ -n "${DOCKER_BUILDKIT}" ]]; then
-    buildkit_suffix=.buildkit
+    buildkit_suffix=.buildkit.alpine
 fi
 
 set -ex
+
+DOCKER_REPO=dpinse/vaultwarden
+DOCKER_TAG=testing-alpine
 
 for arch in "${arches[@]}"; do
     docker build \
@@ -48,3 +51,4 @@ for arch in "${arches[@]}"; do
            -f docker/${arch}/Dockerfile${buildkit_suffix}${distro_suffix} \
            .
 done
+
