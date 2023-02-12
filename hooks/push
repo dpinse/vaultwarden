@@ -33,6 +33,9 @@ if ! timeout 5 bash -c 'cat < /dev/null > /dev/tcp/localhost/5000'; then
     docker run -d --name registry --network host registry:2
 fi
 
+DOCKER_REPO=dpinse/vaultwarden
+DOCKER_TAG=testing-alpine
+
 # Docker Hub sets a `DOCKER_REPO` env var with the format `index.docker.io/user/repo`.
 # Strip the registry portion to construct a local repo path for use in `Dockerfile.buildx`.
 LOCAL_REGISTRY="localhost:5000"
