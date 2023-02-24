@@ -740,6 +740,7 @@ impl Cipher {
             .or_filter(groups::access_all.eq(true)) //Access via group
             .or_filter(collections_groups::collections_uuid.is_not_null()) //Access via group
             .select(ciphers_collections::all_columns)
+            .distinct()
             .load::<(String, String)>(conn).unwrap_or_default()
         }}
     }

@@ -358,7 +358,12 @@ impl UserOrganization {
         })
     }
 
-    pub async fn to_json_user_details(&self, conn: &mut DbConn) -> Value {
+    pub async fn to_json_user_details(
+        &self,
+        include_collections: bool,
+        include_groups: bool,
+        conn: &mut DbConn,
+    ) -> Value {
         let user = User::find_by_uuid(&self.user_uuid, conn).await.unwrap();
 
         // Because BitWarden want the status to be -1 for revoked users we need to catch that here.
@@ -371,11 +376,39 @@ impl UserOrganization {
 
         let twofactor_enabled = !TwoFactor::find_by_user(&user.uuid, conn).await.is_empty();
 
+        let groups: Vec<String> = if include_groups && CONFIG.org_groups_enabled() {
+            GroupUser::find_by_user(&self.uuid, conn).await.iter().map(|gu| gu.groups_uuid.clone()).collect()
+        } else {
+            // The Bitwarden clients seem to call this API regardless of whether groups are enabled,
+            // so just act as if there are no groups.
+            Vec::with_capacity(0)
+        };
+
+        let collections: Vec<Value> = if include_collections {
+            CollectionUser::find_by_organization_and_user_uuid(&self.org_uuid, &self.user_uuid, conn)
+                .await
+                .iter()
+                .map(|cu| {
+                    json!({
+                        "Id": cu.collection_uuid,
+                        "ReadOnly": cu.read_only,
+                        "HidePasswords": cu.hide_passwords,
+                    })
+                })
+                .collect()
+        } else {
+            // The Bitwarden clients seem to call this API regardless of whether groups are enabled,
+            // so just act as if there are no groups.
+            Vec::with_capacity(0)
+        };
+
         json!({
             "Id": self.uuid,
             "UserId": self.user_uuid,
             "Name": user.name,
             "Email": user.email,
+            "Groups": groups,
+            "Collections": collections,
 
             "Status": status,
             "Type": self.atype,

@@ -68,6 +68,33 @@ impl Group {
         })
     }
 
+    pub async fn to_json_details(&self, conn: &mut DbConn) -> Value {
+        use crate::util::format_date;
+
+        let collections_groups = CollectionGroup::find_by_group(&self.uuid, conn)
+            .await
+            .iter()
+            .map(|entry| {
+                json!({
+                    "Id": entry.collections_uuid,
+                    "ReadOnly": entry.read_only,
+                    "HidePasswords": entry.hide_passwords
+                })
+            })
+            .collect::<Value>();
+
+        json!({
+            "Id": self.uuid,
+            "OrganizationId": self.organizations_uuid,
+            "Name": self.name,
+            "AccessAll": self.access_all,
+            "ExternalId": self.external_id,
+            "CreationDate": format_date(&self.creation_date),
+            "RevisionDate": format_date(&self.revision_date),
+            "Collections": collections_groups
+        })
+    }
+
     pub fn set_external_id(&mut self, external_id: Option<String>) {
         //Check if external id is empty. We don't want to have
         //empty strings in the database
