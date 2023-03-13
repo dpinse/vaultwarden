@@ -4,12 +4,15 @@ use serde_json::Value;
 
 use crate::{
     api::{
-        core::log_user_event, EmptyResult, JsonResult, JsonUpcase, Notify, NumberOrString, PasswordData, UpdateType,
+        core::log_user_event, push_logout, register_push_device, unregister_push_device, EmptyResult, JsonResult,
+        JsonUpcase, Notify, NumberOrString, PasswordData, UpdateType,
     },
     auth::{decode_delete, decode_invite, decode_verify_email, ClientIp, Headers},
     crypto,
     db::{models::*, DbConn},
-    mail, CONFIG,
+    mail,
+    //push::{self, push_logout},
+    CONFIG,
 };
 
 pub fn routes() -> Vec<rocket::Route> {
@@ -40,6 +43,9 @@ pub fn routes() -> Vec<rocket::Route> {
         rotate_api_key,
         get_known_device,
         put_avatar,
+        put_device_token,
+        clear_device_token,
+        clear_device_token_post,
     ]
 }
 
@@ -332,7 +338,8 @@ async fn post_password(
     // Prevent loging out the client where the user requested this endpoint from.
     // If you do logout the user it will causes issues at the client side.
     // Adding the device uuid will prevent this.
-    nt.send_logout(&user, Some(headers.device.uuid)).await;
+    nt.send_logout(&user, Some(headers.device.uuid.clone())).await;
+    push_logout(&user, Some(headers.device.uuid.clone()), &mut conn).await;
 
     save_result
 }
@@ -389,7 +396,8 @@ async fn post_kdf(data: JsonUpcase<ChangeKdfData>, headers: Headers, mut conn: D
     user.set_password(&data.NewMasterPasswordHash, Some(data.Key), true, None);
     let save_result = user.save(&mut conn).await;
 
-    nt.send_logout(&user, Some(headers.device.uuid)).await;
+    nt.send_logout(&user, Some(headers.device.uuid.clone())).await;
+    push_logout(&user, Some(headers.device.uuid.clone()), &mut conn).await;
 
     save_result
 }
@@ -482,7 +490,8 @@ async fn post_rotatekey(
     // Prevent loging out the client where the user requested this endpoint from.
     // If you do logout the user it will causes issues at the client side.
     // Adding the device uuid will prevent this.
-    nt.send_logout(&user, Some(headers.device.uuid)).await;
+    nt.send_logout(&user, Some(headers.device.uuid.clone())).await;
+    push_logout(&user, Some(headers.device.uuid.clone()), &mut conn).await;
 
     save_result
 }
@@ -506,6 +515,7 @@ async fn post_sstamp(
     let save_result = user.save(&mut conn).await;
 
     nt.send_logout(&user, None).await;
+    push_logout(&user, None, &mut conn).await;
 
     save_result
 }
@@ -609,6 +619,7 @@ async fn post_email(
     let save_result = user.save(&mut conn).await;
 
     nt.send_logout(&user, None).await;
+    push_logout(&user, None, &mut conn).await;
 
     save_result
 }
@@ -880,4 +891,63 @@ async fn get_known_device(email: String, uuid: String, mut conn: DbConn) -> Json
         result = Device::find_by_uuid_and_user(&uuid, &user.uuid, &mut conn).await.is_some();
     }
     Ok(Json(json!(result)))
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(non_snake_case)]
+struct PushTokenData {
+    pushToken: String,
+}
+
+#[put("/devices/identifier/<uuid>/token", data = "<data>")]
+async fn put_device_token(uuid: String, data: Json<PushTokenData>, headers: Headers, mut conn: DbConn) -> EmptyResult {
+    let data: PushTokenData = data.into_inner();
+    let token = data.pushToken.clone();
+    let mut device = match Device::find_by_uuid_and_user(&headers.device.uuid, &headers.user.uuid, &mut conn).await {
+        Some(device) => device,
+        None => Device::new(uuid, headers.user.uuid.clone(), headers.device.name, headers.device.atype),
+    };
+    device.push_token = Some(token);
+    if device.push_uuid.is_none() {
+        device.push_uuid = Some(uuid::Uuid::new_v4().to_string());
+    }
+    if let Err(e) = device.save(&mut conn).await {
+        error!("An error occured while trying to save the device push token: {}", e);
+        return Err(e);
+    }
+    if CONFIG.push_enabled() {
+        if let Err(e) = register_push_device(headers.user.uuid, device).await {
+            error!("An error occured while proceeding registration of a device: {}", e);
+        };
+    }
+
+    Ok(())
+}
+
+#[put("/devices/identifier/<uuid>/clear-token")]
+async fn clear_device_token(uuid: String, mut conn: DbConn) -> &'static str {
+    // This only clears push token
+    // https://github.com/bitwarden/core/blob/master/src/Api/Controllers/DevicesController.cs#L109
+    // https://github.com/bitwarden/core/blob/master/src/Core/Services/Implementations/DeviceService.cs#L37
+    // This is somehow not implemented in any app, added it in case it is required
+    match Device::delete_token_by_uuid(&uuid, &mut conn).await {
+        Err(e) => error!("{}", e),
+        Ok(_r) => (),
+    };
+    let device = match Device::find_by_uuid(&uuid, &mut conn).await {
+        Some(device) => device,
+        None => return "",
+    };
+    match unregister_push_device(device.uuid).await {
+        Err(e) => error!("{}", e),
+        Ok(_r) => (),
+    };
+    ""
+}
+
+// On upstream server, both PUT and POST are declared. Sadly Rocket doesn't allows to put multiple methods on the same function, so we call the function manually
+#[post("/devices/identifier/<uuid>/clear-token")]
+async fn clear_device_token_post(uuid: String, conn: DbConn) -> &'static str {
+    clear_device_token(uuid, conn).await;
+    ""
 }

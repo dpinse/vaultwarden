@@ -8,7 +8,7 @@ use rocket::serde::json::Json;
 use serde_json::Value;
 
 use crate::{
-    api::{ApiResult, EmptyResult, JsonResult, JsonUpcase, Notify, NumberOrString, UpdateType},
+    api::{push_send_update, ApiResult, EmptyResult, JsonResult, JsonUpcase, Notify, NumberOrString, UpdateType},
     auth::{ClientIp, Headers, Host},
     db::{models::*, DbConn, DbPool},
     util::SafeString,
@@ -180,7 +180,8 @@ async fn post_send(data: JsonUpcase<SendData>, headers: Headers, mut conn: DbCon
 
     let mut send = create_send(data, headers.user.uuid)?;
     send.save(&mut conn).await?;
-    nt.send_send_update(UpdateType::SyncSendCreate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendCreate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendCreate as i32, &send).await;
 
     Ok(Json(send.to_json()))
 }
@@ -252,7 +253,8 @@ async fn post_send_file(data: Form<UploadData<'_>>, headers: Headers, mut conn: 
 
     // Save the changes in the database
     send.save(&mut conn).await?;
-    nt.send_send_update(UpdateType::SyncSendCreate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendCreate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendCreate as i32, &send).await;
 
     Ok(Json(send.to_json()))
 }
@@ -335,7 +337,9 @@ async fn post_send_file_v2_data(
             data.data.move_copy_to(file_path).await?
         }
 
-        nt.send_send_update(UpdateType::SyncSendCreate, &send, &send.update_users_revision(&mut conn).await).await;
+        nt.send_send_update(UpdateType::SyncSendCreate as i32, &send, &send.update_users_revision(&mut conn).await)
+            .await;
+        push_send_update(UpdateType::SyncSendCreate as i32, &send).await;
     } else {
         err!("Send not found. Unable to save the file.");
     }
@@ -397,7 +401,8 @@ async fn post_access(
 
     send.save(&mut conn).await?;
 
-    nt.send_send_update(UpdateType::SyncSendUpdate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendUpdate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendUpdate as i32, &send).await;
 
     Ok(Json(send.to_json_access(&mut conn).await))
 }
@@ -448,7 +453,8 @@ async fn post_access_file(
 
     send.save(&mut conn).await?;
 
-    nt.send_send_update(UpdateType::SyncSendUpdate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendUpdate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendUpdate as i32, &send).await;
 
     let token_claims = crate::auth::generate_send_claims(&send_id, &file_id);
     let token = crate::auth::encode_jwt(&token_claims);
@@ -530,7 +536,8 @@ async fn put_send(
     }
 
     send.save(&mut conn).await?;
-    nt.send_send_update(UpdateType::SyncSendUpdate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendUpdate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendUpdate as i32, &send).await;
 
     Ok(Json(send.to_json()))
 }
@@ -547,7 +554,8 @@ async fn delete_send(id: String, headers: Headers, mut conn: DbConn, nt: Notify<
     }
 
     send.delete(&mut conn).await?;
-    nt.send_send_update(UpdateType::SyncSendDelete, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendDelete as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendDelete as i32, &send).await;
 
     Ok(())
 }
@@ -567,7 +575,8 @@ async fn put_remove_password(id: String, headers: Headers, mut conn: DbConn, nt:
 
     send.set_password(None);
     send.save(&mut conn).await?;
-    nt.send_send_update(UpdateType::SyncSendUpdate, &send, &send.update_users_revision(&mut conn).await).await;
+    nt.send_send_update(UpdateType::SyncSendUpdate as i32, &send, &send.update_users_revision(&mut conn).await).await;
+    push_send_update(UpdateType::SyncSendUpdate as i32, &send).await;
 
     Ok(Json(send.to_json()))
 }

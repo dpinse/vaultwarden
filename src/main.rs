@@ -104,6 +104,7 @@ async fn main() -> Result<(), Error> {
         exit(1);
     });
     check_web_vault();
+    check_push_config();
 
     create_dir(&CONFIG.icon_cache_folder(), "icon cache");
     create_dir(&CONFIG.tmp_folder(), "tmp folder");
@@ -402,6 +403,22 @@ async fn check_data_folder() {
             # It looks like you did not configure a persistent volume!                             #\n\
             # This will result in permanent data loss when the container is removed or updated!    #\n\
             # If you really want to use volatile storage set `I_REALLY_WANT_VOLATILE_STORAGE=true` #\n\
+            ########################################################################################\n"
+        );
+        exit(1);
+    }
+}
+
+fn check_push_config() {
+    if CONFIG.push_enabled()
+        && (CONFIG.push_installation_id() == String::new() || CONFIG.push_installation_key() == String::new())
+    {
+        error!(
+            "Misconfigured Push Notification service\n\
+            ########################################################################################\n\
+            # It looks like you enabled Push Notification feature, but you didn't configured the   #\n\
+            # value. Make sure the installation id and key from https://bitwarden.com/host are     #\n\
+            # added to your configuration.                                                         #\n\
             ########################################################################################\n"
         );
         exit(1);

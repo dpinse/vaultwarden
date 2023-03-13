@@ -1,0 +1,1 @@
+ALTER TABLE devices CREATE COLUMN push_uuid TEXT;

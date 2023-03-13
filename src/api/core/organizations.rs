@@ -6,8 +6,8 @@ use serde_json::Value;
 use crate::{
     api::{
         core::{log_event, CipherSyncData, CipherSyncType},
-        ApiResult, EmptyResult, JsonResult, JsonUpcase, JsonUpcaseVec, JsonVec, Notify, NumberOrString, PasswordData,
-        UpdateType,
+        push_logout, push_user_update, ApiResult, EmptyResult, JsonResult, JsonUpcase, JsonUpcaseVec, JsonVec, Notify,
+        NumberOrString, PasswordData, UpdateType,
     },
     auth::{decode_invite, AdminHeaders, ClientIp, Headers, ManagerHeaders, ManagerHeadersLoose, OwnerHeaders},
     db::{models::*, DbConn},
@@ -1221,7 +1221,8 @@ async fn _confirm_invite(
     let save_result = user_to_confirm.save(conn).await;
 
     if let Some(user) = User::find_by_uuid(&user_to_confirm.user_uuid, conn).await {
-        nt.send_user_update(UpdateType::SyncOrgKeys, &user).await;
+        nt.send_user_update(UpdateType::SyncOrgKeys as i32, &user).await;
+        push_user_update(UpdateType::SyncOrgKeys as i32, &user).await;
     }
 
     save_result
@@ -1467,7 +1468,8 @@ async fn _delete_user(
     .await;
 
     if let Some(user) = User::find_by_uuid(&user_to_delete.user_uuid, conn).await {
-        nt.send_user_update(UpdateType::SyncOrgKeys, &user).await;
+        nt.send_user_update(UpdateType::SyncOrgKeys as i32, &user).await;
+        push_user_update(UpdateType::SyncOrgKeys as i32, &user).await;
     }
 
     user_to_delete.delete(conn).await
@@ -2718,6 +2720,7 @@ async fn put_reset_password(
     user.save(&mut conn).await?;
 
     nt.send_logout(&user, None).await;
+    push_logout(&user, None, &mut conn).await;
 
     log_event(
         EventType::OrganizationUserAdminResetPassword as i32,

@@ -377,6 +377,16 @@ make_config! {
         /// Websocket port
         websocket_port:         u16,    false,  def,    3012;
     },
+    push {
+        /// Enable push notifications
+        push_enabled:           bool,   false,  def,    false;
+        /// Push relay base uri
+        push_relay_uri:         String, false,  def,    "https://push.bitwarden.com".to_string();
+        /// Installation id |> The installation id from https://bitwarden.com/host
+        push_installation_id:   Pass,   false,  def,    String::new();
+        /// Installation key |> The installation key from https://bitwarden.com/host
+        push_installation_key:  Pass,   false,  def,    String::new();
+    },
     jobs {
         /// Job scheduler poll interval |> How often the job scheduler thread checks for jobs to run.
         /// Set to 0 to globally disable scheduled jobs.
