@@ -388,7 +388,7 @@ impl<'r> FromRequest<'r> for Headers {
 
         let device = match Device::find_by_uuid_and_user(&device_uuid, &user_uuid, &mut conn).await {
             Some(device) => device,
-            None => err_handler!("Invalid device id"),
+            None => err_handler!("Invalid device uuid"),
         };
 
         let user = match User::find_by_uuid(&user_uuid, &mut conn).await {
