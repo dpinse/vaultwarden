@@ -389,7 +389,7 @@ async fn get_device(data: &ConnectData, conn: &mut DbConn, user: &User) -> (Devi
     // On iOS, device_type sends "iOS", on others it sends a number
     // When unknown or unable to parse, return 14, which is 'Unknown Browser'
     let device_type = util::try_parse_string(data.device_type.as_ref()).unwrap_or(14);
-    let device_id = data.device_identifier.clone().expect("No device id provided");
+    let device_id = data.device_identifier.clone().expect("No device uuid provided");
     let device_name = data.device_name.clone().expect("No device name provided");
 
     let mut new_device = false;

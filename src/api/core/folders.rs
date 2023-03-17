@@ -2,7 +2,7 @@ use rocket::serde::json::Json;
 use serde_json::Value;
 
 use crate::{
-    api::{EmptyResult, JsonResult, JsonUpcase, Notify, UpdateType},
+    api::{push_folder_update, EmptyResult, JsonResult, JsonUpcase, Notify, UpdateType},
     auth::Headers,
     db::{models::*, DbConn},
 };
@@ -50,7 +50,8 @@ async fn post_folders(data: JsonUpcase<FolderData>, headers: Headers, mut conn: 
     let mut folder = Folder::new(headers.user.uuid, data.Name);
 
     folder.save(&mut conn).await?;
-    nt.send_folder_update(UpdateType::SyncFolderCreate, &folder, &headers.device.uuid).await;
+    nt.send_folder_update(UpdateType::SyncFolderCreate as i32, &folder, &headers.device.uuid).await;
+    push_folder_update(UpdateType::SyncFolderCreate as i32, &folder, &headers.device.uuid, &mut conn).await;
 
     Ok(Json(folder.to_json()))
 }
@@ -88,7 +89,8 @@ async fn put_folder(
     folder.name = data.Name;
 
     folder.save(&mut conn).await?;
-    nt.send_folder_update(UpdateType::SyncFolderUpdate, &folder, &headers.device.uuid).await;
+    nt.send_folder_update(UpdateType::SyncFolderUpdate as i32, &folder, &headers.device.uuid).await;
+    push_folder_update(UpdateType::SyncFolderUpdate as i32, &folder, &headers.device.uuid, &mut conn).await;
 
     Ok(Json(folder.to_json()))
 }
@@ -112,6 +114,7 @@ async fn delete_folder(uuid: String, headers: Headers, mut conn: DbConn, nt: Not
     // Delete the actual folder entry
     folder.delete(&mut conn).await?;
 
-    nt.send_folder_update(UpdateType::SyncFolderDelete, &folder, &headers.device.uuid).await;
+    nt.send_folder_update(UpdateType::SyncFolderDelete as i32, &folder, &headers.device.uuid).await;
+    push_folder_update(UpdateType::SyncFolderDelete as i32, &folder, &headers.device.uuid, &mut conn).await;
     Ok(())
 }

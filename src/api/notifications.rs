@@ -135,7 +135,7 @@ impl WebSocketUsers {
     }
 
     // NOTE: The last modified date needs to be updated before calling these methods
-    pub async fn send_user_update(&self, ut: UpdateType, user: &User) {
+    pub async fn send_user_update(&self, ut: i32, user: &User) {
         let data = create_update(
             vec![("UserId".into(), user.uuid.clone().into()), ("Date".into(), serialize_date(user.updated_at))],
             ut,
@@ -148,14 +148,14 @@ impl WebSocketUsers {
     pub async fn send_logout(&self, user: &User, acting_device_uuid: Option<String>) {
         let data = create_update(
             vec![("UserId".into(), user.uuid.clone().into()), ("Date".into(), serialize_date(user.updated_at))],
-            UpdateType::LogOut,
+            UpdateType::LogOut as i32,
             acting_device_uuid,
         );
 
         self.send_update(&user.uuid, &data).await;
     }
 
-    pub async fn send_folder_update(&self, ut: UpdateType, folder: &Folder, acting_device_uuid: &String) {
+    pub async fn send_folder_update(&self, ut: i32, folder: &Folder, acting_device_uuid: &String) {
         let data = create_update(
             vec![
                 ("Id".into(), folder.uuid.clone().into()),
@@ -171,7 +171,7 @@ impl WebSocketUsers {
 
     pub async fn send_cipher_update(
         &self,
-        ut: UpdateType,
+        ut: i32,
         cipher: &Cipher,
         user_uuids: &[String],
         acting_device_uuid: &String,
@@ -196,7 +196,7 @@ impl WebSocketUsers {
         }
     }
 
-    pub async fn send_send_update(&self, ut: UpdateType, send: &Send, user_uuids: &[String]) {
+    pub async fn send_send_update(&self, ut: i32, send: &Send, user_uuids: &[String]) {
         let user_uuid = convert_option(send.user_uuid.clone());
 
         let data = create_update(
@@ -230,7 +230,7 @@ impl WebSocketUsers {
     ]
 ]
 */
-fn create_update(payload: Vec<(Value, Value)>, ut: UpdateType, acting_device_uuid: Option<String>) -> Vec<u8> {
+fn create_update(payload: Vec<(Value, Value)>, ut: i32, acting_device_uuid: Option<String>) -> Vec<u8> {
     use rmpv::Value as V;
 
     let value = V::Array(vec![
@@ -240,7 +240,7 @@ fn create_update(payload: Vec<(Value, Value)>, ut: UpdateType, acting_device_uui
         "ReceiveMessage".into(),
         V::Array(vec![V::Map(vec![
             ("ContextId".into(), acting_device_uuid.map(|v| v.into()).unwrap_or_else(|| V::Nil)),
-            ("Type".into(), (ut as i32).into()),
+            ("Type".into(), ut.into()),
             ("Payload".into(), payload.into()),
         ])]),
     ]);
@@ -253,7 +253,7 @@ fn create_ping() -> Vec<u8> {
 }
 
 #[allow(dead_code)]
-#[derive(Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum UpdateType {
     SyncCipherUpdate = 0,
     SyncCipherCreate = 1,

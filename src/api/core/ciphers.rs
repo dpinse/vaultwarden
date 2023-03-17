@@ -10,7 +10,10 @@ use rocket::{
 use serde_json::Value;
 
 use crate::{
-    api::{self, core::log_event, EmptyResult, JsonResult, JsonUpcase, Notify, PasswordData, UpdateType},
+    api::{
+        self, core::log_event, push_cipher_update, push_user_update, EmptyResult, JsonResult, JsonUpcase, Notify,
+        PasswordData, UpdateType,
+    },
     auth::Headers,
     crypto,
     db::{models::*, DbConn, DbPool},
@@ -511,10 +514,9 @@ pub async fn update_cipher_from_data(
             )
             .await;
         }
-
-        nt.send_cipher_update(ut, cipher, &cipher.update_users_revision(conn).await, &headers.device.uuid).await;
+        nt.send_cipher_update(ut as i32, cipher, &cipher.update_users_revision(conn).await, &headers.device.uuid).await;
+        push_cipher_update(ut as i32, cipher, &headers.device.uuid, conn).await;
     }
-
     Ok(())
 }
 
@@ -579,7 +581,8 @@ async fn post_ciphers_import(
 
     let mut user = headers.user;
     user.update_revision(&mut conn).await?;
-    nt.send_user_update(UpdateType::SyncVault, &user).await;
+    nt.send_user_update(UpdateType::SyncVault as i32, &user).await;
+    push_user_update(UpdateType::SyncVault as i32, &user).await;
     Ok(())
 }
 
@@ -1103,12 +1106,13 @@ async fn save_attachment(
     }
 
     nt.send_cipher_update(
-        UpdateType::SyncCipherUpdate,
+        UpdateType::SyncCipherUpdate as i32,
         &cipher,
         &cipher.update_users_revision(&mut conn).await,
         &headers.device.uuid,
     )
     .await;
+    push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, &mut conn).await;
 
     if let Some(org_uuid) = &cipher.organization_uuid {
         log_event(
@@ -1392,7 +1396,9 @@ async fn move_cipher_selected(
         // Move cipher
         cipher.move_to_folder(data.FolderId.clone(), &user_uuid, &mut conn).await?;
 
-        nt.send_cipher_update(UpdateType::SyncCipherUpdate, &cipher, &[user_uuid.clone()], &headers.device.uuid).await;
+        nt.send_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &[user_uuid.clone()], &headers.device.uuid)
+            .await;
+        push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, &mut conn).await;
     }
 
     Ok(())
@@ -1439,7 +1445,8 @@ async fn delete_all(
                 Some(user_org) => {
                     if user_org.atype == UserOrgType::Owner {
                         Cipher::delete_all_by_organization(&org_data.org_id, &mut conn).await?;
-                        nt.send_user_update(UpdateType::SyncVault, &user).await;
+                        nt.send_user_update(UpdateType::SyncVault as i32, &user).await;
+                        push_user_update(UpdateType::SyncVault as i32, &user).await;
 
                         log_event(
                             EventType::OrganizationPurgedVault as i32,
@@ -1472,7 +1479,8 @@ async fn delete_all(
             }
 
             user.update_revision(&mut conn).await?;
-            nt.send_user_update(UpdateType::SyncVault, &user).await;
+            nt.send_user_update(UpdateType::SyncVault as i32, &user).await;
+            push_user_update(UpdateType::SyncVault as i32, &user).await;
             Ok(())
         }
     }
@@ -1498,21 +1506,23 @@ async fn _delete_cipher_by_uuid(
         cipher.deleted_at = Some(Utc::now().naive_utc());
         cipher.save(conn).await?;
         nt.send_cipher_update(
-            UpdateType::SyncCipherUpdate,
+            UpdateType::SyncCipherUpdate as i32,
             &cipher,
             &cipher.update_users_revision(conn).await,
             &headers.device.uuid,
         )
         .await;
+        push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, conn).await;
     } else {
         cipher.delete(conn).await?;
         nt.send_cipher_update(
-            UpdateType::SyncCipherDelete,
+            UpdateType::SyncCipherDelete as i32,
             &cipher,
             &cipher.update_users_revision(conn).await,
             &headers.device.uuid,
         )
         .await;
+        push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, conn).await;
     }
 
     if let Some(org_uuid) = cipher.organization_uuid {
@@ -1576,12 +1586,14 @@ async fn _restore_cipher_by_uuid(uuid: &str, headers: &Headers, conn: &mut DbCon
     cipher.save(conn).await?;
 
     nt.send_cipher_update(
-        UpdateType::SyncCipherUpdate,
+        UpdateType::SyncCipherUpdate as i32,
         &cipher,
         &cipher.update_users_revision(conn).await,
         &headers.device.uuid,
     )
     .await;
+    push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, conn).await;
+
     if let Some(org_uuid) = &cipher.organization_uuid {
         log_event(
             EventType::CipherRestored as i32,
@@ -1657,12 +1669,14 @@ async fn _delete_cipher_attachment_by_id(
     // Delete attachment
     attachment.delete(conn).await?;
     nt.send_cipher_update(
-        UpdateType::SyncCipherUpdate,
+        UpdateType::SyncCipherUpdate as i32,
         &cipher,
         &cipher.update_users_revision(conn).await,
         &headers.device.uuid,
     )
     .await;
+    push_cipher_update(UpdateType::SyncCipherUpdate as i32, &cipher, &headers.device.uuid, conn).await;
+
     if let Some(org_uuid) = cipher.organization_uuid {
         log_event(
             EventType::CipherAttachmentDeleted as i32,
