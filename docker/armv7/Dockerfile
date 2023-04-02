@@ -2,7 +2,6 @@
 
 # This file was generated using a Jinja2 template.
 # Please make your changes in `Dockerfile.j2` and then `make` the individual Dockerfiles.
-
 # Using multistage build:
 # 	https://docs.docker.com/develop/develop-images/multistage-build/
 # 	https://whitfin.io/speeding-up-rust-docker-builds/
@@ -27,7 +26,7 @@
 FROM dpinse/vaultwarden:web-vault@sha256:abfb86bb4a3a938648e52985cfb47f92463c56947ff5a9d88c8df55940a43cbe as vault
 
 ########################## BUILD IMAGE  ##########################
-FROM rust:1.68.1-bullseye as build
+FROM rust:1.68.2-bullseye as build
 
 # Build time options to avoid dpkg warnings and help with reproducible builds.
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -48,7 +47,6 @@ RUN dpkg --add-architecture armhf \
         --no-install-recommends \
         gcc-arm-linux-gnueabihf \
         libc6-dev:armhf \
-        libcap2-bin \
         libmariadb-dev:armhf \
         libmariadb-dev-compat:armhf \
         libmariadb3:armhf \
@@ -97,7 +95,6 @@ RUN touch src/main.rs
 # Builds again, this time it'll just be
 # your actual source files being built
 RUN cargo build --features ${DB} --release --target=armv7-unknown-linux-gnueabihf
-
 
 ######################## RUNTIME IMAGE  ########################
 # Create a new stage with a minimal image
