@@ -23,7 +23,7 @@
 #     $ docker image inspect --format "{{.RepoTags}}" vaultwarden/web-vault@sha256:aa6ba791911a815ea570ec2ddc59992481c6ba8fbb65eed4f7074b463430d3ee
 #     [vaultwarden/web-vault:v2023.3.0b]
 #
-FROM dpinse/vaultwarden:web-vault@sha256:abfb86bb4a3a938648e52985cfb47f92463c56947ff5a9d88c8df55940a43cbe as vault
+FROM dpinse/vaultwarden:web-vault@sha256:59d4bce11d3b195b6eb2b4d1db85cd76788a210d2c0239a80da3bd3bb96051c8 as vault
 
 ########################## BUILD IMAGE  ##########################
 FROM rust:1.69.0-bullseye as build
