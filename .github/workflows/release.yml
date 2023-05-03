@@ -25,7 +25,7 @@ jobs:
   # We will skip this check if we are creating a tag, because that has the same hash as a previous run already.
   skip_check:
     runs-on: ubuntu-20.04
-    if: ${{ github.repository == 'dani-garcia/vaultwarden' }}
+    if: ${{ github.repository == 'dpinse/vaultwarden' }}
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
