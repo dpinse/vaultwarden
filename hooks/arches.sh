@@ -4,8 +4,6 @@
 arches=(
     amd64
     arm64
-    armv7
-    armv6
 )
 export arches
 
