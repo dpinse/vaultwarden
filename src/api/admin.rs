@@ -13,7 +13,7 @@ use rocket::{
 };
 
 use crate::{
-    api::{core::log_event, ApiResult, EmptyResult, JsonResult, Notify, NumberOrString},
+    api::{core::log_event, unregister_push_device, ApiResult, EmptyResult, JsonResult, Notify, NumberOrString},
     auth::{decode_admin, encode_jwt, generate_admin_claims, ClientIp},
     config::ConfigBuilder,
     db::{backup_database, get_sql_server_version, models::*, DbConn, DbConnType},
@@ -396,12 +396,22 @@ async fn delete_user(uuid: &str, token: AdminToken, mut conn: DbConn) -> EmptyRe
 #[post("/users/<uuid>/deauth")]
 async fn deauth_user(uuid: &str, _token: AdminToken, mut conn: DbConn, nt: Notify<'_>) -> EmptyResult {
     let mut user = get_user_or_404(uuid, &mut conn).await?;
+
+    if CONFIG.push_enabled() {
+        while let Some(d) = Device::find_push_device_by_user(&user.uuid, &mut conn).await {
+            match unregister_push_device(d.uuid).await {
+                Ok(r) => r,
+                Err(e) => error!("Unable to unregister devices from Bitwarden server: {}", e),
+            };
+        }
+    }
+
     Device::delete_all_by_user(&user.uuid, &mut conn).await?;
     user.reset_security_stamp();
 
     let save_result = user.save(&mut conn).await;
 
-    nt.send_logout(&user, None).await;
+    nt.send_logout(&user, None, &mut conn).await;
 
     save_result
 }
@@ -415,7 +425,7 @@ async fn disable_user(uuid: &str, _token: AdminToken, mut conn: DbConn, nt: Noti
 
     let save_result = user.save(&mut conn).await;
 
-    nt.send_logout(&user, None).await;
+    nt.send_logout(&user, None, &mut conn).await;
 
     save_result
 }
