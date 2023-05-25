@@ -577,7 +577,7 @@ async fn get_json_api<T: DeserializeOwned>(url: &str) -> Result<T, Error> {
 async fn has_http_access() -> bool {
     let http_access = get_reqwest_client();
 
-    match http_access.head("https://github.com/dani-garcia/vaultwarden").send().await {
+    match http_access.head("https://github.com/dpinse/vaultwarden").send().await {
         Ok(r) => r.status().is_success(),
         _ => false,
     }
@@ -591,13 +591,11 @@ async fn get_release_info(has_http_access: bool, running_within_docker: bool) ->
     // If the HTTP Check failed, do not even attempt to check for new versions since we were not able to connect with github.com anyway.
     if has_http_access {
         (
-            match get_json_api::<GitRelease>("https://api.github.com/repos/dani-garcia/vaultwarden/releases/latest")
-                .await
-            {
+            match get_json_api::<GitRelease>("https://api.github.com/repos/dpinse/vaultwarden/releases/latest").await {
                 Ok(r) => r.tag_name,
                 _ => "-".to_string(),
             },
-            match get_json_api::<GitCommit>("https://api.github.com/repos/dani-garcia/vaultwarden/commits/main").await {
+            match get_json_api::<GitCommit>("https://api.github.com/repos/dpinse/vaultwarden/commits/main").await {
                 Ok(mut c) => {
                     c.sha.truncate(8);
                     c.sha
@@ -609,10 +607,8 @@ async fn get_release_info(has_http_access: bool, running_within_docker: bool) ->
             if running_within_docker {
                 "-".to_string()
             } else {
-                match get_json_api::<GitRelease>(
-                    "https://api.github.com/repos/dani-garcia/bw_web_builds/releases/latest",
-                )
-                .await
+                match get_json_api::<GitRelease>("https://api.github.com/repos/dpinse/bw_web_builds/releases/latest")
+                    .await
                 {
                     Ok(r) => r.tag_name.trim_start_matches('v').to_string(),
                     _ => "-".to_string(),
