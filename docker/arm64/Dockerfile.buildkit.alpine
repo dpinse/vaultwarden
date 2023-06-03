@@ -15,15 +15,15 @@
 # - From https://hub.docker.com/r/vaultwarden/web-vault/tags,
 #   click the tag name to view the digest of the image it currently points to.
 # - From the command line:
-#     $ docker pull docker.io/vaultwarden/web-vault:v2023.4.2
-#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2023.4.2
+#     $ docker pull docker.io/vaultwarden/web-vault:v2023.5.0
+#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2023.5.0
 #     [docker.io/vaultwarden/web-vault@sha256:33f95dff16d8b62a6c0334ec0e425e5e549e6a826a4d8d3ea1beb95ded6acb0e]
 #
 # - Conversely, to get the tag name from the digest:
 #     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:33f95dff16d8b62a6c0334ec0e425e5e549e6a826a4d8d3ea1beb95ded6acb0e
-#     [docker.io/vaultwarden/web-vault:v2023.4.2]
+#     [docker.io/vaultwarden/web-vault:v2023.5.0]
 #
-FROM docker.io/dpinse/web-vault@sha256:7022ef8e7dabcf02c61f31dd7fa71b6383437d82682a728bae8412b0e69ed915 as vault
+FROM docker.io/dpinse/web-vault@sha256:1bbd682ed88baab655d804605ed94d2670b3e3ac45fe701c1c1d3f788065a672 as vault
 
 ########################## BUILD IMAGE  ##########################
 FROM docker.io/blackdex/rust-musl:aarch64-musl-stable-1.69.0 as build
