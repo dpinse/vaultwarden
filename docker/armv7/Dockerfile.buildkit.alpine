@@ -21,9 +21,9 @@
 #
 # - Conversely, to get the tag name from the digest:
 #     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:33f95dff16d8b62a6c0334ec0e425e5e549e6a826a4d8d3ea1beb95ded6acb0e
-#     [docker.io/vaultwarden/web-vault:v2023.5.0]
+#     [docker.io/vaultwarden/web-vault:v2023.5.1]
 #
-FROM docker.io/dpinse/web-vault@sha256:1bbd682ed88baab655d804605ed94d2670b3e3ac45fe701c1c1d3f788065a672 as vault
+FROM docker.io/dpinse/web-vault@sha256:b80ebeecd651466ac11301360f66ee448b924f2b281a4ed0464acd1ed50453ab as vault
 
 ########################## BUILD IMAGE  ##########################
 FROM docker.io/blackdex/rust-musl:armv7-musleabihf-stable-1.69.0 as build
