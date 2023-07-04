@@ -106,6 +106,7 @@ struct OrgData {
     CollectionName: String,
     Key: String,
     Name: String,
+    ExternalId: String,
     Keys: Option<OrgKeyData>,
     #[serde(rename = "PlanType")]
     _PlanType: NumberOrString, // Ignored, always use the same plan
@@ -124,6 +125,7 @@ struct NewCollectionData {
     Name: String,
     Groups: Vec<NewCollectionObjectData>,
     Users: Vec<NewCollectionObjectData>,
+    ExternalId: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -168,7 +170,7 @@ async fn create_organization(headers: Headers, data: JsonUpcase<OrgData>, mut co
 
     let org = Organization::new(data.Name, data.BillingEmail, private_key, public_key);
     let mut user_org = UserOrganization::new(headers.user.uuid, org.uuid.clone());
-    let collection = Collection::new(org.uuid.clone(), data.CollectionName);
+    let collection = Collection::new(org.uuid.clone(), data.CollectionName, Some(data.ExternalId));
 
     user_org.akey = data.Key;
     user_org.access_all = true;
@@ -390,7 +392,7 @@ async fn post_organization_collections(
         None => err!("Can't find organization details"),
     };
 
-    let collection = Collection::new(org.uuid, data.Name);
+    let collection = Collection::new(org.uuid, data.Name, data.ExternalId);
     collection.save(&mut conn).await?;
 
     log_event(
@@ -422,6 +424,10 @@ async fn post_organization_collections(
 
         CollectionUser::save(&org_user.user_uuid, &collection.uuid, user.ReadOnly, user.HidePasswords, &mut conn)
             .await?;
+    }
+
+    if headers.org_user.atype == UserOrgType::Manager && !headers.org_user.access_all {
+        CollectionUser::save(&headers.org_user.user_uuid, &collection.uuid, false, false, &mut conn).await?;
     }
 
     Ok(Json(collection.to_json()))
@@ -463,6 +469,7 @@ async fn post_organization_collection_update(
     }
 
     collection.name = data.Name;
+    collection.external_id = data.ExternalId;
     collection.save(&mut conn).await?;
 
     log_event(
@@ -1576,7 +1583,7 @@ async fn post_org_import(
 
     let mut collections = Vec::new();
     for coll in data.Collections {
-        let collection = Collection::new(org_id.clone(), coll.Name);
+        let collection = Collection::new(org_id.clone(), coll.Name, coll.ExternalId);
         if collection.save(&mut conn).await.is_err() {
             collections.push(Err(Error::new("Failed to create Collection", "Failed to create Collection")));
         } else {
@@ -2668,6 +2675,7 @@ async fn delete_group_user(
 #[allow(non_snake_case)]
 struct OrganizationUserResetPasswordEnrollmentRequest {
     ResetPasswordKey: Option<String>,
+    MasterPasswordHash: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2847,6 +2855,17 @@ async fn put_reset_password_enrollment(
     if reset_request.ResetPasswordKey.is_none() && OrgPolicy::org_is_reset_password_auto_enroll(org_id, &mut conn).await
     {
         err!("Reset password can't be withdrawed due to an enterprise policy");
+    }
+
+    if reset_request.ResetPasswordKey.is_some() {
+        match reset_request.MasterPasswordHash {
+            Some(password) => {
+                if !headers.user.check_valid_password(&password) {
+                    err!("Invalid or wrong password")
+                }
+            }
+            None => err!("No password provided"),
+        };
     }
 
     org_user.reset_password_key = reset_request.ResetPasswordKey;
