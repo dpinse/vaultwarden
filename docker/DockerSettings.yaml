@@ -8,7 +8,7 @@ rust_version: 1.73.0 # Rust version to be used
 debian_version: bookworm # Debian release name to be used
 alpine_version: 3.18 # Alpine version to be used
 # For which platforms/architectures will we try to build images
-platforms: ["linux/amd64", "linux/arm64", "linux/arm/v7", "linux/arm/v6"]
+platforms: ["linux/amd64", "linux/arm64"]
 # Determine the build images per OS/Arch
 build_stage_image:
   debian:
