@@ -75,14 +75,6 @@ case "${TARGET}" in
         BASE_TAGS="${BASE_TAGS}-arm64"
         PLATFORM="linux/arm64"
         ;;
-    *-armv7)
-        BASE_TAGS="${BASE_TAGS}-armv7"
-        PLATFORM="linux/arm/v7"
-        ;;
-    *-armv6)
-        BASE_TAGS="${BASE_TAGS}-armv6"
-        PLATFORM="linux/arm/v6"
-        ;;
     *)
         BASE_TAGS="${BASE_TAGS}-amd64"
         PLATFORM="linux/amd64"
