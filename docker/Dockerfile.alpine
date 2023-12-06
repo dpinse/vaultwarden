@@ -31,8 +31,8 @@ FROM --platform=linux/amd64 docker.io/dpinse/web-vault@sha256:d72969c97566fb8bc1
 ########################## ALPINE BUILD IMAGES ##########################
 ## NOTE: The Alpine Base Images do not support other platforms then linux/amd64
 ## And for Alpine we define all build images here, they will only be loaded when actually used
-FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:x86_64-musl-stable-1.73.0 as build_amd64
-FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:aarch64-musl-stable-1.73.0 as build_arm64
+FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:x86_64-musl-stable-1.74.0 as build_amd64
+FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:aarch64-musl-stable-1.74.0 as build_arm64
 
 ########################## BUILD IMAGE ##########################
 # hadolint ignore=DL3006
