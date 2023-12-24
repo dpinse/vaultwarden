@@ -26,7 +26,7 @@
 #     $ docker image inspect --format "{{ '{{' }}.RepoTags}}" docker.io/vaultwarden/web-vault@{{ vault_image_digest }}
 #     [docker.io/vaultwarden/web-vault:{{ vault_version }}]
 #
-FROM --platform=linux/amd64 docker.io/dpinse/web-vault@{{ vault_image_digest }} as vault
+FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@{{ vault_image_digest }} as vault
 
 {% if base == "debian" %}
 ########################## Cross Compile Docker Helper Scripts ##########################
