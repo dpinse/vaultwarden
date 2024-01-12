@@ -480,7 +480,7 @@ make_config! {
         /// Invitation token expiration time (in hours) |> The number of hours after which an organization invite token, emergency access invite token,
         /// email verification token and deletion request token will expire (must be at least 1)
         invitation_expiration_hours: u32, false, def, 120;
-        /// Allow emergency access |> Controls whether users can enable emergency access to their accounts. This setting applies globally to all users.
+        /// Enable emergency access |> Controls whether users can enable emergency access to their accounts. This setting applies globally to all users.
         emergency_access_allowed:    bool,   true,   def,    true;
         /// Allow email change |> Controls whether users can change their email. This setting applies globally to all users.
         email_change_allowed:    bool,   true,   def,    true;
@@ -1232,7 +1232,10 @@ impl Config {
     }
 }
 
-use handlebars::{Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderError, Renderable};
+use handlebars::{
+    Context, DirectorySourceOptions, Handlebars, Helper, HelperResult, Output, RenderContext, RenderErrorReason,
+    Renderable,
+};
 
 fn load_templates<P>(path: P) -> Handlebars<'static>
 where
@@ -1301,19 +1304,27 @@ where
     // And then load user templates to overwrite the defaults
     // Use .hbs extension for the files
     // Templates get registered with their relative name
-    hb.register_templates_directory(".hbs", path).unwrap();
+    hb.register_templates_directory(
+        path,
+        DirectorySourceOptions {
+            tpl_extension: ".hbs".to_owned(),
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     hb
 }
 
 fn case_helper<'reg, 'rc>(
-    h: &Helper<'reg, 'rc>,
+    h: &Helper<'rc>,
     r: &'reg Handlebars<'_>,
     ctx: &'rc Context,
     rc: &mut RenderContext<'reg, 'rc>,
     out: &mut dyn Output,
 ) -> HelperResult {
-    let param = h.param(0).ok_or_else(|| RenderError::new("Param not found for helper \"case\""))?;
+    let param =
+        h.param(0).ok_or_else(|| RenderErrorReason::Other(String::from("Param not found for helper \"case\"")))?;
     let value = param.value().clone();
 
     if h.params().iter().skip(1).any(|x| x.value() == &value) {
@@ -1324,17 +1335,21 @@ fn case_helper<'reg, 'rc>(
 }
 
 fn js_escape_helper<'reg, 'rc>(
-    h: &Helper<'reg, 'rc>,
+    h: &Helper<'rc>,
     _r: &'reg Handlebars<'_>,
     _ctx: &'rc Context,
     _rc: &mut RenderContext<'reg, 'rc>,
     out: &mut dyn Output,
 ) -> HelperResult {
-    let param = h.param(0).ok_or_else(|| RenderError::new("Param not found for helper \"jsesc\""))?;
+    let param =
+        h.param(0).ok_or_else(|| RenderErrorReason::Other(String::from("Param not found for helper \"jsesc\"")))?;
 
     let no_quote = h.param(1).is_some();
 
-    let value = param.value().as_str().ok_or_else(|| RenderError::new("Param for helper \"jsesc\" is not a String"))?;
+    let value = param
+        .value()
+        .as_str()
+        .ok_or_else(|| RenderErrorReason::Other(String::from("Param for helper \"jsesc\" is not a String")))?;
 
     let mut escaped_value = value.replace('\\', "").replace('\'', "\\x22").replace('\"', "\\x27");
     if !no_quote {
@@ -1346,15 +1361,18 @@ fn js_escape_helper<'reg, 'rc>(
 }
 
 fn to_json<'reg, 'rc>(
-    h: &Helper<'reg, 'rc>,
+    h: &Helper<'rc>,
     _r: &'reg Handlebars<'_>,
     _ctx: &'rc Context,
     _rc: &mut RenderContext<'reg, 'rc>,
     out: &mut dyn Output,
 ) -> HelperResult {
-    let param = h.param(0).ok_or_else(|| RenderError::new("Expected 1 parameter for \"to_json\""))?.value();
+    let param = h
+        .param(0)
+        .ok_or_else(|| RenderErrorReason::Other(String::from("Expected 1 parameter for \"to_json\"")))?
+        .value();
     let json = serde_json::to_string(param)
-        .map_err(|e| RenderError::new(format!("Can't serialize parameter to JSON: {e}")))?;
+        .map_err(|e| RenderErrorReason::Other(format!("Can't serialize parameter to JSON: {e}")))?;
     out.write(&json)?;
     Ok(())
 }
