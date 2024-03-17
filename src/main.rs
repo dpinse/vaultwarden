@@ -52,7 +52,7 @@ mod ratelimit;
 mod util;
 
 use crate::api::purge_auth_requests;
-use crate::api::WS_ANONYMOUS_SUBSCRIPTIONS;
+use crate::api::{WS_ANONYMOUS_SUBSCRIPTIONS, WS_USERS};
 pub use config::CONFIG;
 pub use error::{Error, MapResult};
 use rocket::data::{Limits, ToByteUnit};
@@ -65,7 +65,11 @@ async fn main() -> Result<(), Error> {
     launch_info();
 
     use log::LevelFilter as LF;
-    let level = LF::from_str(&CONFIG.log_level()).expect("Valid log level");
+    let level = LF::from_str(&CONFIG.log_level()).unwrap_or_else(|_| {
+        let valid_log_levels = LF::iter().map(|lvl| lvl.as_str().to_lowercase()).collect::<Vec<String>>().join(", ");
+        println!("Log level must be one of the following: {valid_log_levels}");
+        exit(1);
+    });
     init_logging(level).ok();
 
     let extra_debug = matches!(level, LF::Trace | LF::Debug);
@@ -497,7 +501,7 @@ async fn launch_rocket(pool: db::DbPool, extra_debug: bool) -> Result<(), Error>
         .register([basepath, "/api"].concat(), api::core_catchers())
         .register([basepath, "/admin"].concat(), api::admin_catchers())
         .manage(pool)
-        .manage(api::start_notification_server())
+        .manage(Arc::clone(&WS_USERS))
         .manage(Arc::clone(&WS_ANONYMOUS_SUBSCRIPTIONS))
         .attach(util::AppHeaders())
         .attach(util::Cors())
