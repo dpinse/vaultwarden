@@ -18,21 +18,21 @@
 # - From https://hub.docker.com/r/vaultwarden/web-vault/tags,
 #   click the tag name to view the digest of the image it currently points to.
 # - From the command line:
-#     $ docker pull docker.io/vaultwarden/web-vault:v2024.5.0
-#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2024.5.0
-#     [docker.io/vaultwarden/web-vault@sha256:784838b15c775c81b29e8979aaac36dc5ef44ea18ff0adb7fc56c7c62886319b]
+#     $ docker pull docker.io/vaultwarden/web-vault:v2024.5.1
+#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2024.5.1
+#     [docker.io/vaultwarden/web-vault@sha256:4bbfeee86a44fbf2a5a9f6f038946b6931f0a3aa1e8cdcae8805c172d036fa89]
 #
 # - Conversely, to get the tag name from the digest:
-#     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:784838b15c775c81b29e8979aaac36dc5ef44ea18ff0adb7fc56c7c62886319b
-#     [docker.io/vaultwarden/web-vault:v2024.5.0]
+#     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:4bbfeee86a44fbf2a5a9f6f038946b6931f0a3aa1e8cdcae8805c172d036fa89
+#     [docker.io/vaultwarden/web-vault:v2024.5.1]
 #
-FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:c32136c6ffc4b13cec5f027583fb0daec2eb073231fc3ef73c685d653129ebc4 as vault
+FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:060c386f9abf6c0102f2b87b747dcf0c4d572870cfb066e66842995360c624c7 as vault
 
 ########################## ALPINE BUILD IMAGES ##########################
 ## NOTE: The Alpine Base Images do not support other platforms then linux/amd64
 ## And for Alpine we define all build images here, they will only be loaded when actually used
-FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:x86_64-musl-stable-1.78.0 as build_amd64
-FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:aarch64-musl-stable-1.78.0 as build_arm64
+FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:x86_64-musl-stable-1.79.0 as build_amd64
+FROM --platform=linux/amd64 ghcr.io/blackdex/rust-musl:aarch64-musl-stable-1.79.0 as build_arm64
 
 ########################## BUILD IMAGE ##########################
 # hadolint ignore=DL3006
