@@ -64,8 +64,6 @@ fn vaultwarden_css() -> Cached<Css<String>> {
         "signup_disabled": !CONFIG.signups_allowed() && CONFIG.signups_domains_whitelist().is_empty(),
         "sso_disabled": !CONFIG.sso_enabled(),
         "sso_only": CONFIG.sso_enabled() && CONFIG.sso_only(),
-        "vw_version": *VW_VERSION,
-        "web_vault_version": *WEB_VAULT_VERSION,
         "yubico_enabled": CONFIG._enable_yubico() && (CONFIG.yubico_client_id().is_some() == CONFIG.yubico_secret_key().is_some()),
     });
 
