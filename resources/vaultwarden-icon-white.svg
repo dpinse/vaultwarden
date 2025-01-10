@@ -1,78 +1,11 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<svg version="1.1" viewBox="0 0 256 256" id="svg3917" sodipodi:docname="vaultwarden-icon-white.svg" inkscape:version="1.2.1 (9c6d41e410, 2022-07-14, custom)" width="256" height="256" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cc="http://creativecommons.org/ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
-  <defs id="defs3921" />
-  <sodipodi:namedview id="namedview3919" pagecolor="#000000" bordercolor="#666666" borderopacity="1.0" inkscape:showpageshadow="2" inkscape:pageopacity="0" inkscape:pagecheckerboard="0" inkscape:deskcolor="#202020" showgrid="false" inkscape:zoom="3.3359375" inkscape:cx="128" inkscape:cy="128" inkscape:window-width="1874" inkscape:window-height="1056" inkscape:window-x="46" inkscape:window-y="24" inkscape:window-maximized="1" inkscape:current-layer="svg3917" />
-  <title id="title3817">Vaultwarden Icon - White</title>
-  <g id="logo" transform="matrix(2.4381018,0,0,2.4381018,128,128)">
-    <g id="gear" mask="url(#holes)" stroke="#fff">
-      <path d="m-31.1718-33.813208 26.496029 74.188883h9.3515399l26.49603-74.188883h-9.767164l-16.728866 47.588948q-1.662496 4.571864-2.805462 8.624198-1.142966 3.948427-1.870308 7.585137-.72734199-3.63671-1.8703079-7.689043-1.142966-4.052334-2.805462-8.728104l-16.624959-47.381136z" fill="#fff" stroke-width="4.51171" id="path3819" />
-      <circle transform="scale(-1,1)" r="43" fill="none" stroke-width="9" id="circle3821" />
-      <g id="cogs" transform="scale(-1,1)">
-        <polygon id="cog" points="51 0 46 -3 46 3" fill="#fff" stroke="#fff" stroke-linejoin="round" stroke-width="3" />
-        <g fill="#fff" stroke="#fff" id="g3886">
-          <use transform="rotate(11.25)" xlink:href="#cog" id="use3824" />
-          <use transform="rotate(22.5)" xlink:href="#cog" id="use3826" />
-          <use transform="rotate(33.75)" xlink:href="#cog" id="use3828" />
-          <use transform="rotate(45)" xlink:href="#cog" id="use3830" />
-          <use transform="rotate(56.25)" xlink:href="#cog" id="use3832" />
-          <use transform="rotate(67.5)" xlink:href="#cog" id="use3834" />
-          <use transform="rotate(78.75)" xlink:href="#cog" id="use3836" />
-          <use transform="rotate(90)" xlink:href="#cog" id="use3838" />
-          <use transform="rotate(101.25)" xlink:href="#cog" id="use3840" />
-          <use transform="rotate(112.5)" xlink:href="#cog" id="use3842" />
-          <use transform="rotate(123.75)" xlink:href="#cog" id="use3844" />
-          <use transform="rotate(135)" xlink:href="#cog" id="use3846" />
-          <use transform="rotate(146.25)" xlink:href="#cog" id="use3848" />
-          <use transform="rotate(157.5)" xlink:href="#cog" id="use3850" />
-          <use transform="rotate(168.75)" xlink:href="#cog" id="use3852" />
-          <use transform="scale(-1)" xlink:href="#cog" id="use3854" />
-          <use transform="rotate(191.25)" xlink:href="#cog" id="use3856" />
-          <use transform="rotate(202.5)" xlink:href="#cog" id="use3858" />
-          <use transform="rotate(213.75)" xlink:href="#cog" id="use3860" />
-          <use transform="rotate(225)" xlink:href="#cog" id="use3862" />
-          <use transform="rotate(236.25)" xlink:href="#cog" id="use3864" />
-          <use transform="rotate(247.5)" xlink:href="#cog" id="use3866" />
-          <use transform="rotate(258.75)" xlink:href="#cog" id="use3868" />
-          <use transform="rotate(-90)" xlink:href="#cog" id="use3870" />
-          <use transform="rotate(-78.75)" xlink:href="#cog" id="use3872" />
-          <use transform="rotate(-67.5)" xlink:href="#cog" id="use3874" />
-          <use transform="rotate(-56.25)" xlink:href="#cog" id="use3876" />
-          <use transform="rotate(-45)" xlink:href="#cog" id="use3878" />
-          <use transform="rotate(-33.75)" xlink:href="#cog" id="use3880" />
-          <use transform="rotate(-22.5)" xlink:href="#cog" id="use3882" />
-          <use transform="rotate(-11.25)" xlink:href="#cog" id="use3884" />
-        </g>
-      </g>
-      <g id="mounts" transform="scale(-1,1)">
-        <polygon id="mount" points="0 -35 7 -42 -7 -42" fill="#fff" stroke="#fff" stroke-linejoin="round" stroke-width="6" />
-        <g fill="#fff" stroke="#fff" id="g3898">
-          <use transform="rotate(72)" xlink:href="#mount" id="use3890" />
-          <use transform="rotate(144)" xlink:href="#mount" id="use3892" />
-          <use transform="rotate(216)" xlink:href="#mount" id="use3894" />
-          <use transform="rotate(-72)" xlink:href="#mount" id="use3896" />
-        </g>
-      </g>
-    </g>
-    <mask id="holes">
-      <rect x="-60" y="-60" width="120" height="120" fill="#fff" id="rect3902" />
-      <circle id="hole" cy="-40" r="3" />
-      <use transform="rotate(72)" xlink:href="#hole" id="use3905" />
-      <use transform="rotate(144)" xlink:href="#hole" id="use3907" />
-      <use transform="rotate(216)" xlink:href="#hole" id="use3909" />
-      <use transform="rotate(-72)" xlink:href="#hole" id="use3911" />
-    </mask>
-  </g>
-  <metadata id="metadata3915">
-    <rdf:RDF>
-      <cc:Work rdf:about="">
-        <dc:title>Vaultwarden Icon - White</dc:title>
-        <dc:creator>
-          <cc:Agent>
-            <dc:title>Mathijs van Veluw</dc:title>
-          </cc:Agent>
-        </dc:creator>
-        <dc:relation>Rust Logo</dc:relation>
-      </cc:Work>
-    </rdf:RDF>
-  </metadata>
+<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_68_61)">
+<path d="M300 253.125C300 279.023 279.023 300 253.125 300H46.875C20.9766 300 0 279.023 0 253.125V46.875C0 20.9766 20.9766 0 46.875 0H253.125C279.023 0 300 20.9766 300 46.875V253.125Z" fill="#ffffff"/>
+<path d="M243.105 37.6758C241.201 35.7715 238.945 34.834 236.367 34.834H63.6328C61.0254 34.834 58.7988 35.7715 56.8945 37.6758C54.9902 39.5801 54.0527 41.8359 54.0527 44.4141V159.58C54.0527 168.164 55.7227 176.689 59.0625 185.156C62.4023 193.594 66.5625 201.094 71.5137 207.656C76.4648 214.189 82.3535 220.576 89.209 226.787C96.0645 232.998 102.393 238.125 108.164 242.227C113.965 246.328 120 250.195 126.299 253.857C132.598 257.52 137.08 259.98 139.717 261.27C142.354 262.559 144.492 263.584 146.074 264.258C147.275 264.844 148.564 265.166 149.971 265.166C151.377 265.166 152.666 264.873 153.867 264.258C155.479 263.555 157.588 262.559 160.254 261.27C162.891 259.98 167.373 257.49 173.672 253.857C179.971 250.195 186.006 246.328 191.807 242.227C197.607 238.125 203.936 232.969 210.791 226.787C217.646 220.576 223.535 214.219 228.486 207.656C233.438 201.094 237.568 193.623 240.938 185.156C244.277 176.719 245.947 168.193 245.947 159.58V44.4434C245.977 41.8359 245.01 39.5801 243.105 37.6758ZM220.84 160.664C220.84 202.354 150 238.271 150 238.271V59.502H220.84C220.84 59.502 220.84 118.975 220.84 160.664Z" fill="#000000"/>
+</g>
+<defs>
+<clipPath id="clip0_68_61">
+<rect width="300" height="300" fill="white"/>
+</clipPath>
+</defs>
 </svg>

@@ -45,7 +45,7 @@ variable "BASE_TAGS" {
 // This can be a comma separated value
 // Use a full URI like `ghcr.io/dani-garcia/vaultwarden,docker.io/vaultwarden/server`
 variable "CONTAINER_REGISTRIES" {
-  default = "vaultwarden/server"
+  default = "ghcr.io/dpinse/vaultwarden"
 }
 
 
