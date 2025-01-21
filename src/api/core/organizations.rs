@@ -4,6 +4,7 @@ use rocket::Route;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
+use crate::api::admin::FAKE_ADMIN_UUID;
 use crate::{
     api::{
         core::{log_event, two_factor, CipherSyncData, CipherSyncType},
@@ -139,6 +140,7 @@ struct NewCollectionGroupData {
     hide_passwords: bool,
     id: GroupId,
     read_only: bool,
+    manage: bool,
 }
 
 #[derive(Deserialize)]
@@ -147,6 +149,7 @@ struct NewCollectionMemberData {
     hide_passwords: bool,
     id: MembershipId,
     read_only: bool,
+    manage: bool,
 }
 
 #[derive(Deserialize)]
@@ -361,18 +364,13 @@ async fn get_org_collections_details(
             || (CONFIG.org_groups_enabled()
                 && GroupUser::has_access_to_collection_by_member(&col.uuid, &member.uuid, &mut conn).await);
 
-        // Not assigned collections should not be returned
-        if !assigned {
-            continue;
-        }
-
         // get the users assigned directly to the given collection
         let users: Vec<Value> = col_users
             .iter()
-            .filter(|collection_user| collection_user.collection_uuid == col.uuid)
-            .map(|collection_user| {
-                collection_user.to_json_details_for_user(
-                    *membership_type.get(&collection_user.membership_uuid).unwrap_or(&(MembershipType::User as i32)),
+            .filter(|collection_member| collection_member.collection_uuid == col.uuid)
+            .map(|collection_member| {
+                collection_member.to_json_details_for_member(
+                    *membership_type.get(&collection_member.membership_uuid).unwrap_or(&(MembershipType::User as i32)),
                 )
             })
             .collect();
@@ -436,7 +434,7 @@ async fn post_organization_collections(
     .await;
 
     for group in data.groups {
-        CollectionGroup::new(collection.uuid.clone(), group.id, group.read_only, group.hide_passwords)
+        CollectionGroup::new(collection.uuid.clone(), group.id, group.read_only, group.hide_passwords, group.manage)
             .save(&mut conn)
             .await?;
     }
@@ -450,12 +448,19 @@ async fn post_organization_collections(
             continue;
         }
 
-        CollectionUser::save(&member.user_uuid, &collection.uuid, user.read_only, user.hide_passwords, &mut conn)
-            .await?;
+        CollectionUser::save(
+            &member.user_uuid,
+            &collection.uuid,
+            user.read_only,
+            user.hide_passwords,
+            user.manage,
+            &mut conn,
+        )
+        .await?;
     }
 
     if headers.membership.atype == MembershipType::Manager && !headers.membership.access_all {
-        CollectionUser::save(&headers.membership.user_uuid, &collection.uuid, false, false, &mut conn).await?;
+        CollectionUser::save(&headers.membership.user_uuid, &collection.uuid, false, false, false, &mut conn).await?;
     }
 
     Ok(Json(collection.to_json()))
@@ -512,7 +517,9 @@ async fn post_organization_collection_update(
     CollectionGroup::delete_all_by_collection(&col_id, &mut conn).await?;
 
     for group in data.groups {
-        CollectionGroup::new(col_id.clone(), group.id, group.read_only, group.hide_passwords).save(&mut conn).await?;
+        CollectionGroup::new(col_id.clone(), group.id, group.read_only, group.hide_passwords, group.manage)
+            .save(&mut conn)
+            .await?;
     }
 
     CollectionUser::delete_all_by_collection(&col_id, &mut conn).await?;
@@ -526,7 +533,8 @@ async fn post_organization_collection_update(
             continue;
         }
 
-        CollectionUser::save(&member.user_uuid, &col_id, user.read_only, user.hide_passwords, &mut conn).await?;
+        CollectionUser::save(&member.user_uuid, &col_id, user.read_only, user.hide_passwords, user.manage, &mut conn)
+            .await?;
     }
 
     Ok(Json(collection.to_json_details(&headers.user.uuid, None, &mut conn).await))
@@ -684,10 +692,10 @@ async fn get_org_collection_detail(
                 CollectionUser::find_by_collection_swap_user_uuid_with_member_uuid(&collection.uuid, &mut conn)
                     .await
                     .iter()
-                    .map(|collection_user| {
-                        collection_user.to_json_details_for_user(
+                    .map(|collection_member| {
+                        collection_member.to_json_details_for_member(
                             *membership_type
-                                .get(&collection_user.membership_uuid)
+                                .get(&collection_member.membership_uuid)
                                 .unwrap_or(&(MembershipType::User as i32)),
                         )
                     })
@@ -757,7 +765,7 @@ async fn put_collection_users(
             continue;
         }
 
-        CollectionUser::save(&user.user_uuid, &col_id, d.read_only, d.hide_passwords, &mut conn).await?;
+        CollectionUser::save(&user.user_uuid, &col_id, d.read_only, d.hide_passwords, d.manage, &mut conn).await?;
     }
 
     Ok(())
@@ -865,6 +873,7 @@ struct CollectionData {
     id: CollectionId,
     read_only: bool,
     hide_passwords: bool,
+    manage: bool,
 }
 
 #[derive(Deserialize)]
@@ -873,6 +882,7 @@ struct MembershipData {
     id: MembershipId,
     read_only: bool,
     hide_passwords: bool,
+    manage: bool,
 }
 
 #[derive(Deserialize)]
@@ -971,8 +981,8 @@ async fn send_invite(
 
             if let Err(e) = mail::send_invite(
                 &user,
-                Some(org_id.clone()),
-                Some(new_member.uuid.clone()),
+                org_id.clone(),
+                new_member.uuid.clone(),
                 &org_name,
                 Some(headers.user.email.clone()),
             )
@@ -1011,6 +1021,7 @@ async fn send_invite(
                             &collection.uuid,
                             col.read_only,
                             col.hide_passwords,
+                            col.manage,
                             &mut conn,
                         )
                         .await?;
@@ -1098,14 +1109,7 @@ async fn _reinvite_member(
     };
 
     if CONFIG.mail_enabled() {
-        mail::send_invite(
-            &user,
-            Some(org_id.clone()),
-            Some(member.uuid),
-            &org_name,
-            Some(invited_by_email.to_string()),
-        )
-        .await?;
+        mail::send_invite(&user, org_id.clone(), member.uuid, &org_name, Some(invited_by_email.to_string())).await?;
     } else if user.password_hash.is_empty() {
         let invitation = Invitation::new(&user.email);
         invitation.save(conn).await?;
@@ -1131,79 +1135,81 @@ async fn accept_invite(
     org_id: OrganizationId,
     member_id: MembershipId,
     data: Json<AcceptData>,
+    headers: Headers,
     mut conn: DbConn,
 ) -> EmptyResult {
     // The web-vault passes org_id and member_id in the URL, but we are just reading them from the JWT instead
     let data: AcceptData = data.into_inner();
     let claims = decode_invite(&data.token)?;
 
-    // If a claim does not have a member_id or it does not match the one in from the URI, something is wrong.
-    match &claims.member_id {
-        Some(ou_id) if ou_id.eq(&member_id) => {}
-        _ => err!("Error accepting the invitation", "Claim does not match the member_id"),
+    // Don't allow other users from accepting an invitation.
+    if !claims.email.eq(&headers.user.email) {
+        err!("Invitation was issued to a different account", "Claim does not match user_id")
     }
 
-    match User::find_by_mail(&claims.email, &mut conn).await {
-        Some(user) => {
-            Invitation::take(&claims.email, &mut conn).await;
+    // If a claim does not have a member_id or it does not match the one in from the URI, something is wrong.
+    if !claims.member_id.eq(&member_id) {
+        err!("Error accepting the invitation", "Claim does not match the member_id")
+    }
 
-            if let (Some(member), Some(org)) = (&claims.member_id, &claims.org_id) {
-                let Some(mut member) = Membership::find_by_uuid_and_org(member, org, &mut conn).await else {
-                    err!("Error accepting the invitation")
-                };
+    let member = &claims.member_id;
+    let org = &claims.org_id;
 
-                if member.status != MembershipStatus::Invited as i32 {
-                    err!("User already accepted the invitation")
-                }
+    Invitation::take(&claims.email, &mut conn).await;
 
-                let master_password_required = OrgPolicy::org_is_reset_password_auto_enroll(org, &mut conn).await;
-                if data.reset_password_key.is_none() && master_password_required {
-                    err!("Reset password key is required, but not provided.");
-                }
+    // skip invitation logic when we were invited via the /admin panel
+    if **member != FAKE_ADMIN_UUID {
+        let Some(mut member) = Membership::find_by_uuid_and_org(member, org, &mut conn).await else {
+            err!("Error accepting the invitation")
+        };
 
-                // This check is also done at accept_invite, _confirm_invite, _activate_member, edit_member, admin::update_membership_type
-                // It returns different error messages per function.
-                if member.atype < MembershipType::Admin {
-                    match OrgPolicy::is_user_allowed(&member.user_uuid, &org_id, false, &mut conn).await {
-                        Ok(_) => {}
-                        Err(OrgPolicyErr::TwoFactorMissing) => {
-                            if CONFIG.email_2fa_auto_fallback() {
-                                two_factor::email::activate_email_2fa(&user, &mut conn).await?;
-                            } else {
-                                err!("You cannot join this organization until you enable two-step login on your user account");
-                            }
-                        }
-                        Err(OrgPolicyErr::SingleOrgEnforced) => {
-                            err!("You cannot join this organization because you are a member of an organization which forbids it");
-                        }
+        if member.status != MembershipStatus::Invited as i32 {
+            err!("User already accepted the invitation")
+        }
+
+        let master_password_required = OrgPolicy::org_is_reset_password_auto_enroll(org, &mut conn).await;
+        if data.reset_password_key.is_none() && master_password_required {
+            err!("Reset password key is required, but not provided.");
+        }
+
+        // This check is also done at accept_invite, _confirm_invite, _activate_member, edit_member, admin::update_membership_type
+        // It returns different error messages per function.
+        if member.atype < MembershipType::Admin {
+            match OrgPolicy::is_user_allowed(&member.user_uuid, &org_id, false, &mut conn).await {
+                Ok(_) => {}
+                Err(OrgPolicyErr::TwoFactorMissing) => {
+                    if CONFIG.email_2fa_auto_fallback() {
+                        two_factor::email::activate_email_2fa(&headers.user, &mut conn).await?;
+                    } else {
+                        err!("You cannot join this organization until you enable two-step login on your user account");
                     }
                 }
-
-                member.status = MembershipStatus::Accepted as i32;
-
-                if master_password_required {
-                    member.reset_password_key = data.reset_password_key;
+                Err(OrgPolicyErr::SingleOrgEnforced) => {
+                    err!("You cannot join this organization because you are a member of an organization which forbids it");
                 }
-
-                member.save(&mut conn).await?;
             }
         }
-        None => err!("Invited user not found"),
+
+        member.status = MembershipStatus::Accepted as i32;
+
+        if master_password_required {
+            member.reset_password_key = data.reset_password_key;
+        }
+
+        member.save(&mut conn).await?;
     }
 
     if CONFIG.mail_enabled() {
-        let mut org_name = CONFIG.invitation_org_name();
-        if let Some(org_id) = &claims.org_id {
-            org_name = match Organization::find_by_uuid(org_id, &mut conn).await {
+        if let Some(invited_by_email) = &claims.invited_by_email {
+            let org_name = match Organization::find_by_uuid(&claims.org_id, &mut conn).await {
                 Some(org) => org.name,
                 None => err!("Organization not found."),
             };
-        };
-        if let Some(invited_by_email) = &claims.invited_by_email {
             // User was invited to an organization, so they must be confirmed manually after acceptance
             mail::send_invite_accepted(&claims.email, invited_by_email, &org_name).await?;
         } else {
             // User was invited from /admin, so they are automatically confirmed
+            let org_name = CONFIG.invitation_org_name();
             mail::send_invite_confirmed(&claims.email, &org_name).await?;
         }
     }
@@ -1508,6 +1514,7 @@ async fn edit_member(
                         &collection.uuid,
                         col.read_only,
                         col.hide_passwords,
+                        col.manage,
                         &mut conn,
                     )
                     .await?;
@@ -1825,21 +1832,15 @@ async fn list_policies(org_id: OrganizationId, _headers: AdminHeaders, mut conn:
 
 #[get("/organizations/<org_id>/policies/token?<token>")]
 async fn list_policies_token(org_id: OrganizationId, token: &str, mut conn: DbConn) -> JsonResult {
-    // web-vault 2024.6.2 seems to send these values and cause logs to output errors
-    // Catch this and prevent errors in the logs
-    // TODO: CleanUp after 2024.6.x is not used anymore.
-    if org_id.as_ref() == "undefined" && token == "undefined" {
-        return Ok(Json(json!({})));
-    }
-
     let invite = decode_invite(token)?;
 
-    let Some(invite_org_id) = invite.org_id else {
-        err!("Invalid token")
-    };
-
-    if invite_org_id != org_id {
+    if invite.org_id != org_id {
         err!("Token doesn't match request organization");
+    }
+
+    // exit early when we have been invited via /admin panel
+    if org_id.as_ref() == FAKE_ADMIN_UUID {
+        return Ok(Json(json!({})));
     }
 
     // TODO: We receive the invite token as ?token=<>, validate it contains the org id
@@ -2141,8 +2142,8 @@ async fn import(org_id: OrganizationId, data: Json<OrgImportData>, headers: Head
 
                     mail::send_invite(
                         &user,
-                        Some(org_id.clone()),
-                        Some(new_member.uuid.clone()),
+                        org_id.clone(),
+                        new_member.uuid.clone(),
                         &org_name,
                         Some(headers.user.email.clone()),
                     )
@@ -2485,11 +2486,12 @@ struct SelectedCollection {
     id: CollectionId,
     read_only: bool,
     hide_passwords: bool,
+    manage: bool,
 }
 
 impl SelectedCollection {
     pub fn to_collection_group(&self, groups_uuid: GroupId) -> CollectionGroup {
-        CollectionGroup::new(self.id.clone(), groups_uuid, self.read_only, self.hide_passwords)
+        CollectionGroup::new(self.id.clone(), groups_uuid, self.read_only, self.hide_passwords, self.manage)
     }
 }
 
