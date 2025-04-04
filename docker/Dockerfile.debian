@@ -19,15 +19,15 @@
 # - From https://hub.docker.com/r/vaultwarden/web-vault/tags,
 #   click the tag name to view the digest of the image it currently points to.
 # - From the command line:
-#     $ docker pull docker.io/vaultwarden/web-vault:v2025.1.1
-#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2025.1.1
-#     [docker.io/vaultwarden/web-vault@sha256:cb6b2095a4afc1d9d243a33f6d09211f40e3d82c7ae829fd025df5ff175a4918]
+#     $ docker pull docker.io/vaultwarden/web-vault:v2025.3.1
+#     $ docker image inspect --format "{{.RepoDigests}}" docker.io/vaultwarden/web-vault:v2025.3.1
+#     [docker.io/vaultwarden/web-vault@sha256:5b11739052c26dc3c2135b28dc5b072bc607f870a3e81fbbcc72e0cd1f124bcd]
 #
 # - Conversely, to get the tag name from the digest:
-#     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:cb6b2095a4afc1d9d243a33f6d09211f40e3d82c7ae829fd025df5ff175a4918
-#     [docker.io/vaultwarden/web-vault:v2025.1.1]
+#     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:5b11739052c26dc3c2135b28dc5b072bc607f870a3e81fbbcc72e0cd1f124bcd
+#     [docker.io/vaultwarden/web-vault:v2025.3.1]
 #
-FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:3269263f5b98b74717348f7e19b5aba1b2fc2925c81f8b794fdb0afd0b4ec8b5 AS vault
+FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:a5d1d87d2c0eec6e6351088318a00007831ed7d8996336bc090d46f745b8ac26 AS vault
 
 ########################## Cross Compile Docker Helper Scripts ##########################
 ## We use the linux/amd64 no matter which Build Platform, since these are all bash scripts
@@ -36,7 +36,7 @@ FROM --platform=linux/amd64 docker.io/tonistiigi/xx@sha256:9c207bead753dda9430bd
 
 ########################## BUILD IMAGE ##########################
 # hadolint ignore=DL3006
-FROM --platform=$BUILDPLATFORM docker.io/library/rust:1.85.1-slim-bookworm AS build
+FROM --platform=$BUILDPLATFORM docker.io/library/rust:1.86.0-slim-bookworm AS build
 COPY --from=xx / /
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -105,8 +105,15 @@ RUN source /env-cargo && \
         echo "export CARGO_TARGET_$(echo "${CARGO_TARGET}" | tr '[:lower:]' '[:upper:]' | tr - _)_LINKER=/usr/bin/$(xx-info)-gcc" >> /env-cargo && \
         echo "export PKG_CONFIG=/usr/bin/$(xx-info)-pkg-config" >> /env-cargo && \
         echo "export CROSS_COMPILE=1" >> /env-cargo && \
+        # Export build env's for OpenSSL
         echo "export OPENSSL_INCLUDE_DIR=/usr/include/$(xx-info)" >> /env-cargo && \
         echo "export OPENSSL_LIB_DIR=/usr/lib/$(xx-info)" >> /env-cargo ; \
+        # Export build env's for mysqlclient-sys (mariadb)
+        # The version is linked to the mariadb-connector-c a.k.a libmariadb-dev version
+        # See: https://mariadb.com/kb/en/about-mariadb-connector-c/
+        echo "export MYSQLCLIENT_VERSION=3.3.14" >> /env-cargo ; \
+        echo "export MYSQLCLIENT_INCLUDE_DIR=/usr/include/mariadb" >> /env-cargo && \
+        echo "export MYSQLCLIENT_LIB_DIR=/usr/lib/$(xx-info)" >> /env-cargo ; \
     fi && \
     # Output the current contents of the file
     cat /env-cargo
