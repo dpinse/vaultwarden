@@ -212,7 +212,6 @@ pub async fn _static_files_dev(filename: PathBuf) -> Option<NamedFile> {
 pub fn static_files(filename: &str) -> Result<(ContentType, &'static [u8]), Error> {
     match filename {
         "404.png" => Ok((ContentType::PNG, include_bytes!("../static/images/404.png"))),
-        "mail-github.png" => Ok((ContentType::PNG, include_bytes!("../static/images/mail-github.png"))),
         "logo-gray.png" => Ok((ContentType::PNG, include_bytes!("../static/images/logo-gray.png"))),
         "error-x.svg" => Ok((ContentType::SVG, include_bytes!("../static/images/error-x.svg"))),
         "hibp.png" => Ok((ContentType::PNG, include_bytes!("../static/images/hibp.png"))),
