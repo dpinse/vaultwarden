@@ -666,12 +666,10 @@ async fn send_email(address: &str, subject: &str, body_html: String, body_text: 
     let body = if CONFIG.smtp_embed_images() {
         let logo_gray_body = Body::new(crate::api::static_files("logo-gray.png").unwrap().1.to_vec());
         MultiPart::alternative().singlepart(SinglePart::plain(body_text)).multipart(
-            MultiPart::related()
-                .singlepart(SinglePart::html(body_html))
-                .singlepart(
-                    Attachment::new_inline(String::from("logo-gray.png"))
-                        .body(logo_gray_body, "image/png".parse().unwrap()),
-                ),
+            MultiPart::related().singlepart(SinglePart::html(body_html)).singlepart(
+                Attachment::new_inline(String::from("logo-gray.png"))
+                    .body(logo_gray_body, "image/png".parse().unwrap()),
+            ),
         )
     } else {
         MultiPart::alternative_plain_html(body_text, body_html)
