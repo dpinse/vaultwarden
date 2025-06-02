@@ -46,6 +46,7 @@ use jsonwebtoken::errors::Error as JwtErr;
 use lettre::address::AddressError as AddrErr;
 use lettre::error::Error as LettreErr;
 use lettre::transport::smtp::Error as SmtpErr;
+use opendal::Error as OpenDALErr;
 use openssl::error::ErrorStack as SSLErr;
 use regex::Error as RegexErr;
 use reqwest::Error as ReqErr;
@@ -59,6 +60,8 @@ use yubico::yubicoerror::YubicoError as YubiErr;
 #[derive(Serialize)]
 pub struct Empty {}
 
+pub struct Compact {}
+
 // Error struct
 // Contains a String error message, meant for the user and an enum variant, with an error of different types.
 //
@@ -69,6 +72,7 @@ make_error! {
     Empty(Empty):     _no_source, _serialize,
     // Used to represent err! calls
     Simple(String):  _no_source,  _api_error,
+    Compact(Compact):  _no_source,  _api_error_small,
 
     // Used in our custom http client to handle non-global IPs and blocked domains
     CustomHttpClient(CustomHttpClientError): _has_source, _api_error,
@@ -95,6 +99,8 @@ make_error! {
 
     DieselCon(DieselConErr): _has_source, _api_error,
     Webauthn(WebauthnErr):   _has_source, _api_error,
+
+    OpenDAL(OpenDALErr): _has_source, _api_error,
 }
 
 impl std::fmt::Debug for Error {
@@ -129,6 +135,12 @@ impl Error {
     #[must_use]
     pub fn with_msg<M: Into<String>>(mut self, msg: M) -> Self {
         self.message = msg.into();
+        self
+    }
+
+    #[must_use]
+    pub fn with_kind(mut self, kind: ErrorKind) -> Self {
+        self.error = kind;
         self
     }
 
@@ -200,6 +212,18 @@ fn _api_error(_: &impl std::any::Any, msg: &str) -> String {
     _serialize(&json, "")
 }
 
+fn _api_error_small(_: &impl std::any::Any, msg: &str) -> String {
+    let json = json!({
+        "message": msg,
+        "validationErrors": null,
+        "exceptionMessage": null,
+        "exceptionStackTrace": null,
+        "innerExceptionMessage": null,
+        "object": "error"
+    });
+    _serialize(&json, "")
+}
+
 //
 // Rocket responder impl
 //
@@ -212,8 +236,7 @@ use rocket::response::{self, Responder, Response};
 impl Responder<'_, 'static> for Error {
     fn respond_to(self, _: &Request<'_>) -> response::Result<'static> {
         match self.error {
-            ErrorKind::Empty(_) => {}  // Don't print the error in this situation
-            ErrorKind::Simple(_) => {} // Don't print the error in this situation
+            ErrorKind::Empty(_) | ErrorKind::Simple(_) | ErrorKind::Compact(_) => {} // Don't print the error in this situation
             _ => error!(target: "error", "{self:#?}"),
         };
 
@@ -228,6 +251,10 @@ impl Responder<'_, 'static> for Error {
 //
 #[macro_export]
 macro_rules! err {
+    ($kind:ident, $msg:expr) => {{
+        error!("{}", $msg);
+        return Err($crate::error::Error::new($msg, $msg).with_kind($crate::error::ErrorKind::$kind($crate::error::$kind {})));
+    }};
     ($msg:expr) => {{
         error!("{}", $msg);
         return Err($crate::error::Error::new($msg, $msg));

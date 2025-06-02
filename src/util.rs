@@ -16,7 +16,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use crate::CONFIG;
+use crate::{config::PathType, CONFIG};
 
 pub struct AppHeaders();
 
@@ -752,9 +752,20 @@ pub fn convert_json_key_lcase_first(src_json: Value) -> Value {
 
 /// Parses the experimental client feature flags string into a HashMap.
 pub fn parse_experimental_client_feature_flags(experimental_client_feature_flags: &str) -> HashMap<String, bool> {
-    let feature_states = experimental_client_feature_flags.split(',').map(|f| (f.trim().to_owned(), true)).collect();
-
-    feature_states
+    // These flags could still be configured, but are deprecated and not used anymore
+    // To prevent old installations from starting filter these out and not error out
+    const DEPRECATED_FLAGS: &[&str] =
+        &["autofill-overlay", "autofill-v2", "browser-fileless-import", "extension-refresh", "fido2-vault-credentials"];
+    experimental_client_feature_flags
+        .split(',')
+        .filter_map(|f| {
+            let flag = f.trim();
+            if !flag.is_empty() && !DEPRECATED_FLAGS.contains(&flag) {
+                return Some((flag.to_owned(), true));
+            }
+            None
+        })
+        .collect()
 }
 
 /// TODO: This is extracted from IpAddr::is_global, which is unstable:
@@ -814,6 +825,26 @@ pub use is_global_hardcoded as is_global;
 #[inline(always)]
 pub fn is_global(ip: std::net::IpAddr) -> bool {
     ip.is_global()
+}
+
+/// Saves a Rocket temporary file to the OpenDAL Operator at the given path.
+pub async fn save_temp_file(
+    path_type: PathType,
+    path: &str,
+    temp_file: rocket::fs::TempFile<'_>,
+    overwrite: bool,
+) -> Result<(), crate::Error> {
+    use futures::AsyncWriteExt as _;
+    use tokio_util::compat::TokioAsyncReadCompatExt as _;
+
+    let operator = CONFIG.opendal_operator_for_path_type(path_type)?;
+
+    let mut read_stream = temp_file.open().await?.compat();
+    let mut writer = operator.writer_with(path).if_not_exists(!overwrite).await?.into_futures_async_write();
+    futures::io::copy(&mut read_stream, &mut writer).await?;
+    writer.close().await?;
+
+    Ok(())
 }
 
 /// These are some tests to check that the implementations match

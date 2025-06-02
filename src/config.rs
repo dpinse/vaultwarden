@@ -3,7 +3,7 @@ use std::{
     process::exit,
     sync::{
         atomic::{AtomicBool, Ordering},
-        RwLock,
+        LazyLock, RwLock,
     },
 };
 
@@ -22,10 +22,32 @@ static CONFIG_FILE: Lazy<String> = Lazy::new(|| {
     get_env("CONFIG_FILE").unwrap_or_else(|| format!("{data_folder}/config.json"))
 });
 
+static CONFIG_FILE_PARENT_DIR: LazyLock<String> = LazyLock::new(|| {
+    let path = std::path::PathBuf::from(&*CONFIG_FILE);
+    path.parent().unwrap_or(std::path::Path::new("data")).to_str().unwrap_or("data").to_string()
+});
+
+static CONFIG_FILENAME: LazyLock<String> = LazyLock::new(|| {
+    let path = std::path::PathBuf::from(&*CONFIG_FILE);
+    path.file_name().unwrap_or(std::ffi::OsStr::new("config.json")).to_str().unwrap_or("config.json").to_string()
+});
+
 pub static SKIP_CONFIG_VALIDATION: AtomicBool = AtomicBool::new(false);
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
-    Config::load().unwrap_or_else(|e| {
+    std::thread::spawn(|| {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap_or_else(|e| {
+            println!("Error loading config:\n  {e:?}\n");
+            exit(12)
+        });
+
+        rt.block_on(Config::load()).unwrap_or_else(|e| {
+            println!("Error loading config:\n  {e:?}\n");
+            exit(12)
+        })
+    })
+    .join()
+    .unwrap_or_else(|e| {
         println!("Error loading config:\n  {e:?}\n");
         exit(12)
     })
@@ -110,10 +132,11 @@ macro_rules! make_config {
                 builder
             }
 
-            fn from_file(path: &str) -> Result<Self, Error> {
-                let config_str = std::fs::read_to_string(path)?;
-                println!("[INFO] Using saved config from `{path}` for configuration.\n");
-                serde_json::from_str(&config_str).map_err(Into::into)
+            async fn from_file() -> Result<Self, Error> {
+                let operator = opendal_operator_for_path(&CONFIG_FILE_PARENT_DIR)?;
+                let config_bytes = operator.read(&CONFIG_FILENAME).await?;
+                println!("[INFO] Using saved config from `{}` for configuration.\n", *CONFIG_FILE);
+                serde_json::from_slice(&config_bytes.to_vec()).map_err(Into::into)
             }
 
             fn clear_non_editable(&mut self) {
@@ -579,7 +602,7 @@ make_config! {
         authenticator_disable_time_drift: bool, true, def, false;
 
         /// Customize the enabled feature flags on the clients |> This is a comma separated list of feature flags to enable.
-        experimental_client_feature_flags: String, false, def, "fido2-vault-credentials".to_string();
+        experimental_client_feature_flags: String, false, def, String::new();
 
         /// Require new device emails |> When a user logs in an email is required to be sent.
         /// If sending the email fails the login attempt will fail.
@@ -833,21 +856,25 @@ fn validate_config(cfg: &ConfigItems) -> Result<(), Error> {
         }
     }
 
-    // TODO: deal with deprecated flags so they can be removed from this list, cf. #4263
+    // Server (v2025.5.0): https://github.com/bitwarden/server/blob/4a7db112a0952c6df8bacf36c317e9c4e58c3651/src/Core/Constants.cs#L102
+    // Client (v2025.5.0): https://github.com/bitwarden/clients/blob/9df8a3cc50ed45f52513e62c23fcc8a4b745f078/libs/common/src/enums/feature-flag.enum.ts#L10
+    // Android (v2025.4.0): https://github.com/bitwarden/android/blob/bee09de972c3870de0d54a0067996be473ec55c7/app/src/main/java/com/x8bit/bitwarden/data/platform/manager/model/FlagKey.kt#L27
+    // iOS (v2025.4.0): https://github.com/bitwarden/ios/blob/956e05db67344c912e3a1b8cb2609165d67da1c9/BitwardenShared/Core/Platform/Models/Enum/FeatureFlag.swift#L7
+    //
+    // NOTE: Move deprecated flags to the utils::parse_experimental_client_feature_flags() DEPRECATED_FLAGS const!
     const KNOWN_FLAGS: &[&str] = &[
-        "autofill-overlay",
-        "autofill-v2",
-        "browser-fileless-import",
-        "extension-refresh",
-        "fido2-vault-credentials",
+        // Autofill Team
         "inline-menu-positioning-improvements",
-        "ssh-key-vault-item",
+        "inline-menu-totp",
         "ssh-agent",
+        // Key Management Team
+        "ssh-key-vault-item",
+        // Tools
+        "export-attachments",
+        // Mobile Team
         "anon-addy-self-host-alias",
         "simple-login-self-host-alias",
         "mutual-tls",
-        "export-attachments",
-        "inline-menu-totp",
     ];
     let configured_flags = parse_experimental_client_feature_flags(&cfg.experimental_client_feature_flags);
     let invalid_flags: Vec<_> = configured_flags.keys().filter(|flag| !KNOWN_FLAGS.contains(&flag.as_str())).collect();
@@ -1134,11 +1161,93 @@ fn smtp_convert_deprecated_ssl_options(smtp_ssl: Option<bool>, smtp_explicit_tls
     "starttls".to_string()
 }
 
+fn opendal_operator_for_path(path: &str) -> Result<opendal::Operator, Error> {
+    // Cache of previously built operators by path
+    static OPERATORS_BY_PATH: LazyLock<dashmap::DashMap<String, opendal::Operator>> =
+        LazyLock::new(dashmap::DashMap::new);
+
+    if let Some(operator) = OPERATORS_BY_PATH.get(path) {
+        return Ok(operator.clone());
+    }
+
+    let operator = if path.starts_with("s3://") {
+        #[cfg(not(s3))]
+        return Err(opendal::Error::new(opendal::ErrorKind::ConfigInvalid, "S3 support is not enabled").into());
+
+        #[cfg(s3)]
+        opendal_s3_operator_for_path(path)?
+    } else {
+        let builder = opendal::services::Fs::default().root(path);
+        opendal::Operator::new(builder)?.finish()
+    };
+
+    OPERATORS_BY_PATH.insert(path.to_string(), operator.clone());
+
+    Ok(operator)
+}
+
+#[cfg(s3)]
+fn opendal_s3_operator_for_path(path: &str) -> Result<opendal::Operator, Error> {
+    // This is a custom AWS credential loader that uses the official AWS Rust
+    // SDK config crate to load credentials. This ensures maximum compatibility
+    // with AWS credential configurations. For example, OpenDAL doesn't support
+    // AWS SSO temporary credentials yet.
+    struct OpenDALS3CredentialLoader {}
+
+    #[async_trait]
+    impl reqsign::AwsCredentialLoad for OpenDALS3CredentialLoader {
+        async fn load_credential(&self, _client: reqwest::Client) -> anyhow::Result<Option<reqsign::AwsCredential>> {
+            use aws_credential_types::provider::ProvideCredentials as _;
+            use tokio::sync::OnceCell;
+
+            static DEFAULT_CREDENTIAL_CHAIN: OnceCell<
+                aws_config::default_provider::credentials::DefaultCredentialsChain,
+            > = OnceCell::const_new();
+
+            let chain = DEFAULT_CREDENTIAL_CHAIN
+                .get_or_init(|| aws_config::default_provider::credentials::DefaultCredentialsChain::builder().build())
+                .await;
+
+            let creds = chain.provide_credentials().await?;
+
+            Ok(Some(reqsign::AwsCredential {
+                access_key_id: creds.access_key_id().to_string(),
+                secret_access_key: creds.secret_access_key().to_string(),
+                session_token: creds.session_token().map(|s| s.to_string()),
+                expires_in: creds.expiry().map(|expiration| expiration.into()),
+            }))
+        }
+    }
+
+    const OPEN_DAL_S3_CREDENTIAL_LOADER: OpenDALS3CredentialLoader = OpenDALS3CredentialLoader {};
+
+    let url = Url::parse(path).map_err(|e| format!("Invalid path S3 URL path {path:?}: {e}"))?;
+
+    let bucket = url.host_str().ok_or_else(|| format!("Missing Bucket name in data folder S3 URL {path:?}"))?;
+
+    let builder = opendal::services::S3::default()
+        .customized_credential_load(Box::new(OPEN_DAL_S3_CREDENTIAL_LOADER))
+        .enable_virtual_host_style()
+        .bucket(bucket)
+        .root(url.path())
+        .default_storage_class("INTELLIGENT_TIERING");
+
+    Ok(opendal::Operator::new(builder)?.finish())
+}
+
+pub enum PathType {
+    Data,
+    IconCache,
+    Attachments,
+    Sends,
+    RsaKey,
+}
+
 impl Config {
-    pub fn load() -> Result<Self, Error> {
+    pub async fn load() -> Result<Self, Error> {
         // Loading from env and file
         let _env = ConfigBuilder::from_env();
-        let _usr = ConfigBuilder::from_file(&CONFIG_FILE).unwrap_or_default();
+        let _usr = ConfigBuilder::from_file().await.unwrap_or_default();
 
         // Create merged config, config file overwrites env
         let mut _overrides = Vec::new();
@@ -1162,7 +1271,7 @@ impl Config {
         })
     }
 
-    pub fn update_config(&self, other: ConfigBuilder, ignore_non_editable: bool) -> Result<(), Error> {
+    pub async fn update_config(&self, other: ConfigBuilder, ignore_non_editable: bool) -> Result<(), Error> {
         // Remove default values
         //let builder = other.remove(&self.inner.read().unwrap()._env);
 
@@ -1194,20 +1303,19 @@ impl Config {
         }
 
         //Save to file
-        use std::{fs::File, io::Write};
-        let mut file = File::create(&*CONFIG_FILE)?;
-        file.write_all(config_str.as_bytes())?;
+        let operator = opendal_operator_for_path(&CONFIG_FILE_PARENT_DIR)?;
+        operator.write(&CONFIG_FILENAME, config_str).await?;
 
         Ok(())
     }
 
-    fn update_config_partial(&self, other: ConfigBuilder) -> Result<(), Error> {
+    async fn update_config_partial(&self, other: ConfigBuilder) -> Result<(), Error> {
         let builder = {
             let usr = &self.inner.read().unwrap()._usr;
             let mut _overrides = Vec::new();
             usr.merge(&other, false, &mut _overrides)
         };
-        self.update_config(builder, false)
+        self.update_config(builder, false).await
     }
 
     /// Tests whether an email's domain is allowed. A domain is allowed if it
@@ -1249,8 +1357,9 @@ impl Config {
         }
     }
 
-    pub fn delete_user_config(&self) -> Result<(), Error> {
-        std::fs::remove_file(&*CONFIG_FILE)?;
+    pub async fn delete_user_config(&self) -> Result<(), Error> {
+        let operator = opendal_operator_for_path(&CONFIG_FILE_PARENT_DIR)?;
+        operator.delete(&CONFIG_FILENAME).await?;
 
         // Empty user config
         let usr = ConfigBuilder::default();
@@ -1280,7 +1389,7 @@ impl Config {
         inner._enable_smtp && (inner.smtp_host.is_some() || inner.use_sendmail)
     }
 
-    pub fn get_duo_akey(&self) -> String {
+    pub async fn get_duo_akey(&self) -> String {
         if let Some(akey) = self._duo_akey() {
             akey
         } else {
@@ -1291,7 +1400,7 @@ impl Config {
                 _duo_akey: Some(akey_s.clone()),
                 ..Default::default()
             };
-            self.update_config_partial(builder).ok();
+            self.update_config_partial(builder).await.ok();
 
             akey_s
         }
@@ -1302,6 +1411,23 @@ impl Config {
         let token = self.admin_token();
 
         token.is_some() && !token.unwrap().trim().is_empty()
+    }
+
+    pub fn opendal_operator_for_path_type(&self, path_type: PathType) -> Result<opendal::Operator, Error> {
+        let path = match path_type {
+            PathType::Data => self.data_folder(),
+            PathType::IconCache => self.icon_cache_folder(),
+            PathType::Attachments => self.attachments_folder(),
+            PathType::Sends => self.sends_folder(),
+            PathType::RsaKey => std::path::Path::new(&self.rsa_key_filename())
+                .parent()
+                .ok_or_else(|| std::io::Error::other("Failed to get directory of RSA key file"))?
+                .to_str()
+                .ok_or_else(|| std::io::Error::other("Failed to convert RSA key file directory to UTF-8 string"))?
+                .to_string(),
+        };
+
+        opendal_operator_for_path(&path)
     }
 
     pub fn render_template<T: serde::ser::Serialize>(&self, name: &str, data: &T) -> Result<String, Error> {
@@ -1373,6 +1499,7 @@ where
     reg!("email/email_footer_text");
 
     reg!("email/admin_reset_password", ".html");
+    reg!("email/change_email_existing", ".html");
     reg!("email/change_email", ".html");
     reg!("email/delete_account", ".html");
     reg!("email/emergency_access_invite_accepted", ".html");

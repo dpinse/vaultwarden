@@ -1,7 +1,9 @@
 use std::path::Path;
+use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use num_traits::ToPrimitive;
+use once_cell::sync::Lazy;
 use rocket::form::Form;
 use rocket::fs::NamedFile;
 use rocket::fs::TempFile;
@@ -11,12 +13,28 @@ use serde_json::Value;
 use crate::{
     api::{ApiResult, EmptyResult, JsonResult, Notify, UpdateType},
     auth::{ClientIp, Headers, Host},
+    config::PathType,
     db::{models::*, DbConn, DbPool},
-    util::NumberOrString,
+    util::{save_temp_file, NumberOrString},
     CONFIG,
 };
 
 const SEND_INACCESSIBLE_MSG: &str = "Send does not exist or is no longer available";
+static ANON_PUSH_DEVICE: Lazy<Device> = Lazy::new(|| {
+    let dt = crate::util::parse_date("1970-01-01T00:00:00.000000Z");
+    Device {
+        uuid: String::from("00000000-0000-0000-0000-000000000000").into(),
+        created_at: dt,
+        updated_at: dt,
+        user_uuid: String::from("00000000-0000-0000-0000-000000000000").into(),
+        name: String::new(),
+        atype: 14, // 14 == Unknown Browser
+        push_uuid: Some(String::from("00000000-0000-0000-0000-000000000000").into()),
+        push_token: None,
+        refresh_token: String::new(),
+        twofactor_remember: None,
+    }
+});
 
 // The max file size allowed by Bitwarden clients and add an extra 5% to avoid issues
 const SIZE_525_MB: i64 = 550_502_400;
@@ -182,7 +200,7 @@ async fn post_send(data: Json<SendData>, headers: Headers, mut conn: DbConn, nt:
         UpdateType::SyncSendCreate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &headers.device.uuid,
+        &headers.device,
         &mut conn,
     )
     .await;
@@ -204,13 +222,15 @@ struct UploadDataV2<'f> {
 // @deprecated Mar 25 2021: This method has been deprecated in favor of direct uploads (v2).
 // This method still exists to support older clients, probably need to remove it sometime.
 // Upstream: https://github.com/bitwarden/server/blob/d0c793c95181dfb1b447eb450f85ba0bfd7ef643/src/Api/Controllers/SendsController.cs#L164-L167
+// 2025: This endpoint doesn't seem to exists anymore in the latest version
+// See: https://github.com/bitwarden/server/blob/9ebe16587175b1c0e9208f84397bb75d0d595510/src/Api/Tools/Controllers/SendsController.cs
 #[post("/sends/file", format = "multipart/form-data", data = "<data>")]
 async fn post_send_file(data: Form<UploadData<'_>>, headers: Headers, mut conn: DbConn, nt: Notify<'_>) -> JsonResult {
     enforce_disable_send_policy(&headers, &mut conn).await?;
 
     let UploadData {
         model,
-        mut data,
+        data,
     } = data.into_inner();
     let model = model.into_inner();
 
@@ -250,13 +270,8 @@ async fn post_send_file(data: Form<UploadData<'_>>, headers: Headers, mut conn: 
     }
 
     let file_id = crate::crypto::generate_send_file_id();
-    let folder_path = tokio::fs::canonicalize(&CONFIG.sends_folder()).await?.join(&send.uuid);
-    let file_path = folder_path.join(&file_id);
-    tokio::fs::create_dir_all(&folder_path).await?;
 
-    if let Err(_err) = data.persist_to(&file_path).await {
-        data.move_copy_to(file_path).await?
-    }
+    save_temp_file(PathType::Sends, &format!("{}/{file_id}", send.uuid), data, true).await?;
 
     let mut data_value: Value = serde_json::from_str(&send.data)?;
     if let Some(o) = data_value.as_object_mut() {
@@ -272,7 +287,7 @@ async fn post_send_file(data: Form<UploadData<'_>>, headers: Headers, mut conn: 
         UpdateType::SyncSendCreate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &headers.device.uuid,
+        &headers.device,
         &mut conn,
     )
     .await;
@@ -280,7 +295,7 @@ async fn post_send_file(data: Form<UploadData<'_>>, headers: Headers, mut conn: 
     Ok(Json(send.to_json()))
 }
 
-// Upstream: https://github.com/bitwarden/server/blob/d0c793c95181dfb1b447eb450f85ba0bfd7ef643/src/Api/Controllers/SendsController.cs#L190
+// Upstream: https://github.com/bitwarden/server/blob/9ebe16587175b1c0e9208f84397bb75d0d595510/src/Api/Tools/Controllers/SendsController.cs#L165
 #[post("/sends/file/v2", data = "<data>")]
 async fn post_send_file_v2(data: Json<SendData>, headers: Headers, mut conn: DbConn) -> JsonResult {
     enforce_disable_send_policy(&headers, &mut conn).await?;
@@ -351,7 +366,7 @@ pub struct SendFileData {
     fileName: String,
 }
 
-// https://github.com/bitwarden/server/blob/66f95d1c443490b653e5a15d32977e2f5a3f9e32/src/Api/Tools/Controllers/SendsController.cs#L250
+// https://github.com/bitwarden/server/blob/9ebe16587175b1c0e9208f84397bb75d0d595510/src/Api/Tools/Controllers/SendsController.cs#L195
 #[post("/sends/<send_id>/file/<file_id>", format = "multipart/form-data", data = "<data>")]
 async fn post_send_file_v2_data(
     send_id: SendId,
@@ -363,7 +378,7 @@ async fn post_send_file_v2_data(
 ) -> EmptyResult {
     enforce_disable_send_policy(&headers, &mut conn).await?;
 
-    let mut data = data.into_inner();
+    let data = data.into_inner();
 
     let Some(send) = Send::find_by_uuid_and_user(&send_id, &headers.user.uuid, &mut conn).await else {
         err!("Send not found. Unable to save the file.", "Invalid send uuid or does not belong to user.")
@@ -406,25 +421,15 @@ async fn post_send_file_v2_data(
         err!("Send file size does not match.", format!("Expected a file size of {} got {size}", send_data.size));
     }
 
-    let folder_path = tokio::fs::canonicalize(&CONFIG.sends_folder()).await?.join(send_id);
-    let file_path = folder_path.join(file_id);
+    let file_path = format!("{send_id}/{file_id}");
 
-    // Check if the file already exists, if that is the case do not overwrite it
-    if tokio::fs::metadata(&file_path).await.is_ok() {
-        err!("Send file has already been uploaded.", format!("File {file_path:?} already exists"))
-    }
-
-    tokio::fs::create_dir_all(&folder_path).await?;
-
-    if let Err(_err) = data.data.persist_to(&file_path).await {
-        data.data.move_copy_to(file_path).await?
-    }
+    save_temp_file(PathType::Sends, &file_path, data.data, false).await?;
 
     nt.send_send_update(
         UpdateType::SyncSendCreate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &headers.device.uuid,
+        &headers.device,
         &mut conn,
     )
     .await;
@@ -489,7 +494,7 @@ async fn post_access(
         UpdateType::SyncSendUpdate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &String::from("00000000-0000-0000-0000-000000000000").into(),
+        &ANON_PUSH_DEVICE,
         &mut conn,
     )
     .await;
@@ -546,18 +551,29 @@ async fn post_access_file(
         UpdateType::SyncSendUpdate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &String::from("00000000-0000-0000-0000-000000000000").into(),
+        &ANON_PUSH_DEVICE,
         &mut conn,
     )
     .await;
 
-    let token_claims = crate::auth::generate_send_claims(&send_id, &file_id);
-    let token = crate::auth::encode_jwt(&token_claims);
     Ok(Json(json!({
         "object": "send-fileDownload",
         "id": file_id,
-        "url": format!("{}/api/sends/{send_id}/{file_id}?t={token}", &host.host)
+        "url": download_url(&host, &send_id, &file_id).await?,
     })))
+}
+
+async fn download_url(host: &Host, send_id: &SendId, file_id: &SendFileId) -> Result<String, crate::Error> {
+    let operator = CONFIG.opendal_operator_for_path_type(PathType::Sends)?;
+
+    if operator.info().scheme() == opendal::Scheme::Fs {
+        let token_claims = crate::auth::generate_send_claims(send_id, file_id);
+        let token = crate::auth::encode_jwt(&token_claims);
+
+        Ok(format!("{}/api/sends/{send_id}/{file_id}?t={token}", &host.host))
+    } else {
+        Ok(operator.presign_read(&format!("{send_id}/{file_id}"), Duration::from_secs(5 * 60)).await?.uri().to_string())
+    }
 }
 
 #[get("/sends/<send_id>/<file_id>?<t>")]
@@ -645,7 +661,7 @@ pub async fn update_send_from_data(
 
     send.save(conn).await?;
     if ut != UpdateType::None {
-        nt.send_send_update(ut, send, &send.update_users_revision(conn).await, &headers.device.uuid, conn).await;
+        nt.send_send_update(ut, send, &send.update_users_revision(conn).await, &headers.device, conn).await;
     }
     Ok(())
 }
@@ -661,7 +677,7 @@ async fn delete_send(send_id: SendId, headers: Headers, mut conn: DbConn, nt: No
         UpdateType::SyncSendDelete,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &headers.device.uuid,
+        &headers.device,
         &mut conn,
     )
     .await;
@@ -683,7 +699,7 @@ async fn put_remove_password(send_id: SendId, headers: Headers, mut conn: DbConn
         UpdateType::SyncSendUpdate,
         &send,
         &send.update_users_revision(&mut conn).await,
-        &headers.device.uuid,
+        &headers.device,
         &mut conn,
     )
     .await;

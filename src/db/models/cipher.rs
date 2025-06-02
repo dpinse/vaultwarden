@@ -141,18 +141,28 @@ impl Cipher {
         cipher_sync_data: Option<&CipherSyncData>,
         sync_type: CipherSyncType,
         conn: &mut DbConn,
-    ) -> Value {
+    ) -> Result<Value, crate::Error> {
         use crate::util::{format_date, validate_and_format_date};
 
         let mut attachments_json: Value = Value::Null;
         if let Some(cipher_sync_data) = cipher_sync_data {
             if let Some(attachments) = cipher_sync_data.cipher_attachments.get(&self.uuid) {
-                attachments_json = attachments.iter().map(|c| c.to_json(host)).collect();
+                if !attachments.is_empty() {
+                    let mut attachments_json_vec = vec![];
+                    for attachment in attachments {
+                        attachments_json_vec.push(attachment.to_json(host).await?);
+                    }
+                    attachments_json = Value::Array(attachments_json_vec);
+                }
             }
         } else {
             let attachments = Attachment::find_by_cipher(&self.uuid, conn).await;
             if !attachments.is_empty() {
-                attachments_json = attachments.iter().map(|c| c.to_json(host)).collect()
+                let mut attachments_json_vec = vec![];
+                for attachment in attachments {
+                    attachments_json_vec.push(attachment.to_json(host).await?);
+                }
+                attachments_json = Value::Array(attachments_json_vec);
             }
         }
 
@@ -318,7 +328,7 @@ impl Cipher {
         // supports the "cipherDetails" type, though it seems like the
         // Bitwarden clients will ignore extra fields.
         //
-        // Ref: https://github.com/bitwarden/server/blob/master/src/Core/Models/Api/Response/CipherResponseModel.cs
+        // Ref: https://github.com/bitwarden/server/blob/9ebe16587175b1c0e9208f84397bb75d0d595510/src/Api/Vault/Models/Response/CipherResponseModel.cs#L14
         let mut json_object = json!({
             "object": "cipherDetails",
             "id": self.uuid,
@@ -384,7 +394,7 @@ impl Cipher {
         };
 
         json_object[key] = type_data_json;
-        json_object
+        Ok(json_object)
     }
 
     pub async fn update_users_revision(&self, conn: &mut DbConn) -> Vec<UserId> {
