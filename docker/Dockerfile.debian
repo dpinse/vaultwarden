@@ -27,7 +27,7 @@
 #     $ docker image inspect --format "{{.RepoTags}}" docker.io/vaultwarden/web-vault@sha256:a0a377b810e66a4ebf1416f732d2be06f3262bf5a5238695af88d3ec6871cc0e
 #     [docker.io/vaultwarden/web-vault:v2025.5.0]
 #
-FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:2f27ce9aba53aea156f0fb38fe3025759b0e157a781891f2c06dac913ee10b94 AS vault
+FROM --platform=linux/amd64 ghcr.io/dpinse/bw_web_builds@sha256:5f7130c4c0a139f5432df736b2be27c80851c51435414605eb7f9969424b3029 AS vault
 
 ########################## Cross Compile Docker Helper Scripts ##########################
 ## We use the linux/amd64 no matter which Build Platform, since these are all bash scripts
