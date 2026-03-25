@@ -624,7 +624,7 @@ async fn get_text_api(url: &str) -> Result<String, Error> {
 }
 
 async fn has_http_access() -> bool {
-    let Ok(req) = make_http_request(Method::HEAD, "https://github.com/dpinse/vaultwarden") else {
+    let Ok(req) = make_http_request(Method::HEAD, "https://google.com") else {
         return false;
     };
     match req.send().await {
